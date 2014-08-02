@@ -37,6 +37,9 @@ cp -R --preserve=mode $RELEASE_BASE/src/go/* /srv/salt/kube-proxy/go
 mkdir -p /srv/salt/controller-manager/go
 cp -R --preserve=mode $RELEASE_BASE/src/go/* /srv/salt/controller-manager/go
 
+mkdir -p /srv/salt/build-controller/go
+cp -R --preserve=mode $RELEASE_BASE/src/go/* /srv/salt/build-controller/go
+
 mkdir -p /srv/salt/kubelet/go
 cp -R --preserve=mode $RELEASE_BASE/src/go/* /srv/salt/kubelet/go
 
