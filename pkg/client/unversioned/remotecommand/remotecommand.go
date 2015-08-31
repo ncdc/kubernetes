@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"sync"
 
 	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/api"
@@ -155,26 +156,24 @@ func (e *Streamer) doStream() error {
 	}
 	defer conn.Close()
 
-	doneChan := make(chan struct{}, 2)
-	errorChan := make(chan error)
-
 	cp := func(s string, dst io.Writer, src io.Reader) {
 		glog.V(4).Infof("Copying %s", s)
 		defer glog.V(4).Infof("Done copying %s", s)
 		if _, err := io.Copy(dst, src); err != nil && err != io.EOF {
 			glog.Errorf("Error copying %s: %v", s, err)
 		}
-		if s == api.StreamTypeStdout || s == api.StreamTypeStderr {
-			doneChan <- struct{}{}
-		}
 	}
 
 	headers := http.Header{}
+
+	// set up error stream
+	errorChan := make(chan error)
 	headers.Set(api.StreamType, api.StreamTypeError)
 	errorStream, err := conn.CreateStream(headers)
 	if err != nil {
 		return err
 	}
+	defer errorStream.Close()
 	go func() {
 		message, err := ioutil.ReadAll(errorStream)
 		if err != nil && err != io.EOF {
@@ -185,60 +184,77 @@ func (e *Streamer) doStream() error {
 			errorChan <- fmt.Errorf("Error executing remote command: %s", message)
 			return
 		}
+		errorChan <- nil
 	}()
-	defer errorStream.Reset()
 
+	var wg sync.WaitGroup
+
+	// set up stdin stream
 	if e.stdin != nil {
+		wg.Add(1)
+
 		headers.Set(api.StreamType, api.StreamTypeStdin)
 		remoteStdin, err := conn.CreateStream(headers)
 		if err != nil {
 			return err
 		}
-		defer remoteStdin.Reset()
-		// TODO this goroutine will never exit cleanly (the io.Copy never unblocks)
-		// because stdin is not closed until the process exits. If we try to call
-		// stdin.Close(), it returns no error but doesn't unblock the copy. It will
-		// exit when the process exits, instead.
-		go cp(api.StreamTypeStdin, remoteStdin, e.stdin)
+
+		// copy from client's stdin to container's stdin
+		go func() {
+			// if e.stdin is noninteractive, e.g. `echo abc | kubectl exec -i <pod> -- cat`, make sure
+			// we close remoteStdin as soon as the copy from e.stdin to remoteStdin finishes. Otherwise
+			// the executed command will remain running.
+			defer remoteStdin.Close()
+			cp(api.StreamTypeStdin, remoteStdin, e.stdin)
+		}()
+
+		// read from remoteStdin until the stream is closed. this is essential to
+		// be able to exit interactive sessions cleanly and not leak goroutines or
+		// hang the client's terminal.
+		//
+		// if you have an interactive session, when you type 'exit' and hit enter,
+		// the exec'd process in the container will exit. As soon as
+		// go-dockerclient finishes reading from the container's stdout, it will
+		// call Close() on the stdin io.ReadCloser, which is remoteStdin. At this
+		// point, the cp finishes, and it's safe to call wg.Done().
+		go func() {
+			defer wg.Done()
+			defer remoteStdin.Close()
+			// this "copy" doesn't actually read anything - it's just here to wait for
+			// the server to close remoteStdin.
+			cp("remote stdin", ioutil.Discard, remoteStdin)
+		}()
 	}
 
-	waitCount := 0
-	completedStreams := 0
-
 	if e.stdout != nil {
-		waitCount++
+		wg.Add(1)
 		headers.Set(api.StreamType, api.StreamTypeStdout)
 		remoteStdout, err := conn.CreateStream(headers)
 		if err != nil {
 			return err
 		}
-		defer remoteStdout.Reset()
-		go cp(api.StreamTypeStdout, e.stdout, remoteStdout)
+		defer remoteStdout.Close()
+		go func() {
+			defer wg.Done()
+			cp(api.StreamTypeStdout, e.stdout, remoteStdout)
+		}()
 	}
 
 	if e.stderr != nil && !e.tty {
-		waitCount++
+		wg.Add(1)
 		headers.Set(api.StreamType, api.StreamTypeStderr)
 		remoteStderr, err := conn.CreateStream(headers)
 		if err != nil {
 			return err
 		}
-		defer remoteStderr.Reset()
-		go cp(api.StreamTypeStderr, e.stderr, remoteStderr)
+		defer remoteStderr.Close()
+		go func() {
+			defer wg.Done()
+			cp(api.StreamTypeStderr, e.stderr, remoteStderr)
+		}()
 	}
 
-Loop:
-	for {
-		select {
-		case <-doneChan:
-			completedStreams++
-			if completedStreams == waitCount {
-				break Loop
-			}
-		case err := <-errorChan:
-			return err
-		}
-	}
+	wg.Wait()
 
-	return nil
+	return <-errorChan
 }
