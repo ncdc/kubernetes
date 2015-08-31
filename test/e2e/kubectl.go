@@ -17,9 +17,11 @@ limitations under the License.
 package e2e
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -29,6 +31,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"k8s.io/kubernetes/pkg/api"
@@ -159,11 +162,40 @@ var _ = Describe("Kubectl client", func() {
 		It("should support exec", func() {
 			By("executing a command in the container")
 			execOutput := runKubectl("exec", fmt.Sprintf("--namespace=%v", ns), simplePodName, "echo", "running", "in", "container")
-			expectedExecOutput := "running in container"
-			if execOutput != expectedExecOutput {
-				Failf("Unexpected kubectl exec output. Wanted '%s', got '%s'", execOutput, expectedExecOutput)
+			if e, a := "running in container", execOutput; e != a {
+				Failf("Unexpected kubectl exec output. Wanted %q, got %q", e, a)
+			}
+
+			By("executing a command in the container with noninteractive stdin")
+			execOutput = newKubectlCommand("exec", fmt.Sprintf("--namespace=%v", ns), "-i", simplePodName, "cat").
+				withStdinData("abcd1234").
+				exec()
+			if e, a := "abcd1234", execOutput; e != a {
+				Failf("Unexpected kubectl exec output. Wanted %q, got %q", e, a)
+			}
+
+			// pretend that we're a user in an interactive shell
+			br := newBlockingReader("echo hi\nexit\n")
+			// make sure to close the blocking reader so the copy from br to w below can unblock
+			defer br.Close()
+
+			// use a pipe here so cmd.Wait() isn't waiting on the io.Copy of stdin to
+			// finish, as it won't unblock until the deferred br.Close() above is called
+			r, w, err := os.Pipe()
+			if err != nil {
+				Failf("Error creating os.Pipe: %v", err)
+			}
+			go io.Copy(w, br)
+
+			By("executing a command in the container with pseudo-interactive stdin")
+			execOutput = newKubectlCommand("exec", fmt.Sprintf("--namespace=%v", ns), "-i", simplePodName, "bash").
+				withStdinReader(r).
+				exec()
+			if e, a := "hi", execOutput; e != a {
+				Failf("Unexpected kubectl exec output. Wanted %q, got %q", e, a)
 			}
 		})
+
 		It("should support port-forward", func() {
 			By("forwarding the container port to a local port")
 			cmd := kubectlCmd("port-forward", fmt.Sprintf("--namespace=%v", ns), simplePodName, fmt.Sprintf(":%d", simplePodPort))
@@ -791,4 +823,37 @@ func getUDData(jpgExpected string, ns string) func(*client.Client, string) error
 			return errors.New(fmt.Sprintf("data served up in container is inaccurate, %s didn't contain %s", data, jpgExpected))
 		}
 	}
+}
+
+type blockingBuffer struct {
+	reader io.Reader
+	wg     sync.WaitGroup
+}
+
+// newBlockingReader returns a reader that allows reading the given string,
+// then blocks until Close() is called.
+func newBlockingReader(s string) io.ReadCloser {
+	b := &blockingBuffer{
+		reader: bytes.NewBufferString(s),
+	}
+	b.wg.Add(1)
+	return b
+}
+
+func (b *blockingBuffer) Read(p []byte) (int, error) {
+	n, err := b.reader.Read(p)
+	switch {
+	case err == io.EOF && n > 0:
+		return n, nil
+	case err == io.EOF && n == 0:
+		b.wg.Wait()
+		return 0, io.EOF
+	default:
+		return n, err
+	}
+}
+
+func (b *blockingBuffer) Close() error {
+	b.wg.Done()
+	return nil
 }
