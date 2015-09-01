@@ -70,7 +70,7 @@ func fakeExecServer(t *testing.T, i int, stdinData, stdoutData, stderrData, erro
 					receivedStreams++
 				case api.StreamTypeStdin:
 					stdinStream = stream
-					stdinStream.Close()
+					//stdinStream.Close()
 					receivedStreams++
 				case api.StreamTypeStdout:
 					stdoutStream = stream
@@ -82,7 +82,7 @@ func fakeExecServer(t *testing.T, i int, stdinData, stdoutData, stderrData, erro
 					t.Errorf("%d: unexpected stream type: %q", i, streamType)
 				}
 
-				defer stream.Reset()
+				//defer stream.Reset()
 
 				if receivedStreams == expectedStreams {
 					break WaitForStreams
@@ -91,16 +91,34 @@ func fakeExecServer(t *testing.T, i int, stdinData, stdoutData, stderrData, erro
 		}
 
 		if len(errorData) > 0 {
-			fmt.Fprint(errorStream, errorData)
+			n, err := fmt.Fprint(errorStream, errorData)
+			if err != nil {
+				t.Errorf("%d: error writing to errorStream: %v", i, err)
+			}
+			if e, a := len(errorData), n; e != a {
+				t.Errorf("%d: expected to write %d bytes to errorStream, but only wrote %d", i, e, a)
+			}
 			errorStream.Close()
 		}
 
 		if len(stdoutData) > 0 {
-			fmt.Fprint(stdoutStream, stdoutData)
+			n, err := fmt.Fprint(stdoutStream, stdoutData)
+			if err != nil {
+				t.Errorf("%d: error writing to stdoutStream: %v", i, err)
+			}
+			if e, a := len(stdoutData), n; e != a {
+				t.Errorf("%d: expected to write %d bytes to stdoutStream, but only wrote %d", i, e, a)
+			}
 			stdoutStream.Close()
 		}
 		if len(stderrData) > 0 {
-			fmt.Fprint(stderrStream, stderrData)
+			n, err := fmt.Fprint(stderrStream, stderrData)
+			if err != nil {
+				t.Errorf("%d: error writing to stderrStream: %v", i, err)
+			}
+			if e, a := len(stderrData), n; e != a {
+				t.Errorf("%d: expected to write %d bytes to stderrStream, but only wrote %d", i, e, a)
+			}
 			stderrStream.Close()
 		}
 		if len(stdinData) > 0 {
@@ -111,6 +129,7 @@ func fakeExecServer(t *testing.T, i int, stdinData, stdoutData, stderrData, erro
 			if e, a := stdinData, string(data); e != a {
 				t.Errorf("%d: stdin: expected %q, got %q", i, e, a)
 			}
+			stdinStream.Close()
 		}
 	})
 }
@@ -139,6 +158,7 @@ func TestRequestExecuteRemoteCommand(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
+		fmt.Println("ANDY EXEC STARTING TC", i)
 		localOut := &bytes.Buffer{}
 		localErr := &bytes.Buffer{}
 
@@ -152,7 +172,6 @@ func TestRequestExecuteRemoteCommand(t *testing.T) {
 			Host: server.URL,
 		}
 		e := New(req, conf, []string{"ls", "/"}, strings.NewReader(testCase.Stdin), localOut, localErr, testCase.Tty)
-		//e.upgrader = testCase.Upgrader
 		err := e.Execute()
 		hasErr := err != nil
 
@@ -216,6 +235,7 @@ func TestRequestAttachRemoteCommand(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
+		fmt.Println("ANDY ATTACH STARTING TC", i)
 		localOut := &bytes.Buffer{}
 		localErr := &bytes.Buffer{}
 
@@ -229,7 +249,6 @@ func TestRequestAttachRemoteCommand(t *testing.T) {
 			Host: server.URL,
 		}
 		e := NewAttach(req, conf, strings.NewReader(testCase.Stdin), localOut, localErr, testCase.Tty)
-		//e.upgrader = testCase.Upgrader
 		err := e.Execute()
 		hasErr := err != nil
 

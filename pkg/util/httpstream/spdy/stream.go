@@ -31,5 +31,6 @@ var _ httpstream.Stream = &stream{}
 // Close tears down the stream so it can't be used any more. Any pending reads
 // are unblocked. This is achieved by issuing a spdystream Reset.
 func (s *stream) Close() error {
-	return s.Stream.Reset()
+	//return s.Stream.Reset()
+	return s.Stream.Close()
 }

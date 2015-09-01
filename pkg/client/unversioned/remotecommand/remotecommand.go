@@ -173,7 +173,7 @@ func (e *Streamer) doStream() error {
 	if err != nil {
 		return err
 	}
-	defer errorStream.Close()
+	errorStream.Close()
 	go func() {
 		message, err := ioutil.ReadAll(errorStream)
 		if err != nil && err != io.EOF {
@@ -233,7 +233,7 @@ func (e *Streamer) doStream() error {
 		if err != nil {
 			return err
 		}
-		defer remoteStdout.Close()
+		remoteStdout.Close()
 		go func() {
 			defer wg.Done()
 			cp(api.StreamTypeStdout, e.stdout, remoteStdout)
@@ -247,7 +247,7 @@ func (e *Streamer) doStream() error {
 		if err != nil {
 			return err
 		}
-		defer remoteStderr.Close()
+		remoteStderr.Close()
 		go func() {
 			defer wg.Done()
 			cp(api.StreamTypeStderr, e.stderr, remoteStderr)
