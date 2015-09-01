@@ -173,7 +173,11 @@ func (e *Streamer) doStream() error {
 	if err != nil {
 		return err
 	}
+
+	// inform the server we're not writing anything to this stream
+	// NOTE this only means we can't write, but we can still read!
 	errorStream.Close()
+
 	go func() {
 		message, err := ioutil.ReadAll(errorStream)
 		if err != nil && err != io.EOF {
@@ -191,8 +195,6 @@ func (e *Streamer) doStream() error {
 
 	// set up stdin stream
 	if e.stdin != nil {
-		wg.Add(1)
-
 		headers.Set(api.StreamType, api.StreamTypeStdin)
 		remoteStdin, err := conn.CreateStream(headers)
 		if err != nil {
@@ -217,6 +219,7 @@ func (e *Streamer) doStream() error {
 		// go-dockerclient finishes reading from the container's stdout, it will
 		// call Close() on the stdin io.ReadCloser, which is remoteStdin. At this
 		// point, the cp finishes, and it's safe to call wg.Done().
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			defer remoteStdin.Close()
@@ -227,13 +230,17 @@ func (e *Streamer) doStream() error {
 	}
 
 	if e.stdout != nil {
-		wg.Add(1)
 		headers.Set(api.StreamType, api.StreamTypeStdout)
 		remoteStdout, err := conn.CreateStream(headers)
 		if err != nil {
 			return err
 		}
+
+		// inform the server we're not writing anything to this stream
+		// NOTE this only means we can't write, but we can still read!
 		remoteStdout.Close()
+
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			cp(api.StreamTypeStdout, e.stdout, remoteStdout)
@@ -241,20 +248,27 @@ func (e *Streamer) doStream() error {
 	}
 
 	if e.stderr != nil && !e.tty {
-		wg.Add(1)
 		headers.Set(api.StreamType, api.StreamTypeStderr)
 		remoteStderr, err := conn.CreateStream(headers)
 		if err != nil {
 			return err
 		}
+
+		// inform the server we're not writing anything to this stream
+		// NOTE this only means we can't write, but we can still read!
 		remoteStderr.Close()
+
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			cp(api.StreamTypeStderr, e.stderr, remoteStderr)
 		}()
 	}
 
+	// we're waiting for stdout/stderr to finish copying and for stdin to finish
+	// copying or to be closed remotely
 	wg.Wait()
 
+	// waits for errorStream to finish reading with an error or nil
 	return <-errorChan
 }
