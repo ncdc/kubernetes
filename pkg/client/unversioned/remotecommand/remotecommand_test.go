@@ -70,7 +70,6 @@ func fakeExecServer(t *testing.T, i int, stdinData, stdoutData, stderrData, erro
 					receivedStreams++
 				case api.StreamTypeStdin:
 					stdinStream = stream
-					//stdinStream.Close()
 					receivedStreams++
 				case api.StreamTypeStdout:
 					stdoutStream = stream
@@ -81,8 +80,6 @@ func fakeExecServer(t *testing.T, i int, stdinData, stdoutData, stderrData, erro
 				default:
 					t.Errorf("%d: unexpected stream type: %q", i, streamType)
 				}
-
-				//defer stream.Reset()
 
 				if receivedStreams == expectedStreams {
 					break WaitForStreams
@@ -170,7 +167,6 @@ func TestRequestExecuteRemoteCommand(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		fmt.Println("ANDY EXEC STARTING TC", i)
 		localOut := &bytes.Buffer{}
 		localErr := &bytes.Buffer{}
 
@@ -247,7 +243,6 @@ func TestRequestAttachRemoteCommand(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		fmt.Println("ANDY ATTACH STARTING TC", i)
 		localOut := &bytes.Buffer{}
 		localErr := &bytes.Buffer{}
 
