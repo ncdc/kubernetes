@@ -176,11 +176,12 @@ var _ = Describe("Kubectl client", func() {
 
 			// pretend that we're a user in an interactive shell
 			br := newBlockingReader("echo hi\nexit\n")
-			// make sure to close the blocking reader so the copy from br to w below can unblock
+			// make sure to close the blocking reader so the copy from br to w below can unblock.
+			// NOTE this is solely for test cleanup!
 			defer br.Close()
 
-			// use a pipe here so cmd.Wait() isn't waiting on the io.Copy of stdin to
-			// finish, as it won't unblock until the deferred br.Close() above is called
+			// we use an os.Pipe so the Cmd's Stdin is an *os.File, so we don't end up
+			// with Cmd.Wait() blocked waiting for the process to finish reading Stdin.
 			r, w, err := os.Pipe()
 			if err != nil {
 				Failf("Error creating os.Pipe: %v", err)
