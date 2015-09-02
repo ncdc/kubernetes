@@ -174,10 +174,6 @@ func (e *Streamer) doStream() error {
 		return err
 	}
 
-	// inform the server we're not writing anything to this stream
-	// NOTE this only means we can't write, but we can still read!
-	errorStream.Close()
-
 	go func() {
 		message, err := ioutil.ReadAll(errorStream)
 		if err != nil && err != io.EOF {
@@ -192,6 +188,7 @@ func (e *Streamer) doStream() error {
 	}()
 
 	var wg sync.WaitGroup
+	var closeRemoteStdin sync.Once
 
 	// set up stdin stream
 	if e.stdin != nil {
@@ -206,7 +203,7 @@ func (e *Streamer) doStream() error {
 			// if e.stdin is noninteractive, e.g. `echo abc | kubectl exec -i <pod> -- cat`, make sure
 			// we close remoteStdin as soon as the copy from e.stdin to remoteStdin finishes. Otherwise
 			// the executed command will remain running.
-			defer remoteStdin.Close()
+			defer closeRemoteStdin.Do(func() { remoteStdin.Close() })
 			cp(api.StreamTypeStdin, remoteStdin, e.stdin)
 		}()
 
@@ -214,15 +211,15 @@ func (e *Streamer) doStream() error {
 		// be able to exit interactive sessions cleanly and not leak goroutines or
 		// hang the client's terminal.
 		//
-		// if you have an interactive session, when you type 'exit' and hit enter,
-		// the exec'd process in the container will exit. As soon as
-		// go-dockerclient finishes reading from the container's stdout, it will
-		// call Close() on the stdin io.ReadCloser, which is remoteStdin. At this
-		// point, the cp finishes, and it's safe to call wg.Done().
-		wg.Add(1)
+		// go-dockerclient's current hijack implementation
+		// (https://github.com/fsouza/go-dockerclient/blob/89f3d56d93788dfe85f864a44f85d9738fca0670/client.go#L564)
+		// waits for all three streams (stdin/stdout/stderr) to finish copying
+		// before returning. When hijack finishes copying stdout/stderr, it calls
+		// Close() on its side of remoteStdin, which allows this copy to complete.
+		// When that happens, we must Close() on our side of remoteStdin, to
+		// allow the copy in hijack to complete, and hijack to return.
 		go func() {
-			defer wg.Done()
-			defer remoteStdin.Close()
+			defer closeRemoteStdin.Do(func() { remoteStdin.Close() })
 			// this "copy" doesn't actually read anything - it's just here to wait for
 			// the server to close remoteStdin.
 			cp("remote stdin", ioutil.Discard, remoteStdin)
@@ -235,10 +232,6 @@ func (e *Streamer) doStream() error {
 		if err != nil {
 			return err
 		}
-
-		// inform the server we're not writing anything to this stream
-		// NOTE this only means we can't write, but we can still read!
-		remoteStdout.Close()
 
 		wg.Add(1)
 		go func() {
@@ -253,10 +246,6 @@ func (e *Streamer) doStream() error {
 		if err != nil {
 			return err
 		}
-
-		// inform the server we're not writing anything to this stream
-		// NOTE this only means we can't write, but we can still read!
-		remoteStderr.Close()
 
 		wg.Add(1)
 		go func() {

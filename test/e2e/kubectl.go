@@ -17,7 +17,6 @@ limitations under the License.
 package e2e
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -175,18 +174,12 @@ var _ = Describe("Kubectl client", func() {
 			}
 
 			// pretend that we're a user in an interactive shell
-			br := newBlockingReader("echo hi\nexit\n")
-			// make sure to close the blocking reader so the copy from br to w below can unblock.
-			// NOTE this is solely for test cleanup!
-			defer br.Close()
-
-			// we use an os.Pipe so the Cmd's Stdin is an *os.File, so we don't end up
-			// with Cmd.Wait() blocked waiting for the process to finish reading Stdin.
-			r, w, err := os.Pipe()
+			r, c, err := newBlockingReader("echo hi\nexit\n")
 			if err != nil {
-				Failf("Error creating os.Pipe: %v", err)
+				Failf("Error creating blocking reader: %v", err)
 			}
-			go io.Copy(w, br)
+			// NOTE this is solely for test cleanup!
+			defer c.Close()
 
 			By("executing a command in the container with pseudo-interactive stdin")
 			execOutput = newKubectlCommand("exec", fmt.Sprintf("--namespace=%v", ns), "-i", simplePodName, "bash").
@@ -832,29 +825,18 @@ type blockingBuffer struct {
 }
 
 // newBlockingReader returns a reader that allows reading the given string,
-// then blocks until Close() is called.
-func newBlockingReader(s string) io.ReadCloser {
-	b := &blockingBuffer{
-		reader: bytes.NewBufferString(s),
+// then blocks until Close() is called on the returned closer.
+//
+// We're explicitly returning the reader and closer separately, because
+// the closer needs to be the *os.File we get from os.Pipe(). This is required
+// so the exec of kubectl can pass the underlying file descriptor to the exec
+// syscall, instead of creating another os.Pipe and blocking on the io.Copy
+// between the source (e.g. stdin) and the write half of the pipe.
+func newBlockingReader(s string) (io.Reader, io.Closer, error) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		return nil, nil, err
 	}
-	b.wg.Add(1)
-	return b
-}
-
-func (b *blockingBuffer) Read(p []byte) (int, error) {
-	n, err := b.reader.Read(p)
-	switch {
-	case err == io.EOF && n > 0:
-		return n, nil
-	case err == io.EOF && n == 0:
-		b.wg.Wait()
-		return 0, io.EOF
-	default:
-		return n, err
-	}
-}
-
-func (b *blockingBuffer) Close() error {
-	b.wg.Done()
-	return nil
+	w.Write([]byte(s))
+	return r, w, nil
 }
