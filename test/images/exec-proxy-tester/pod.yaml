@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: exec-proxy-tester
+  labels:
+    app: exec-proxy-tester
+spec:
+  containers:
+  - name: exec-proxy-tester
+    image: gcr.io/google_containers/exec-proxy-tester:0.1
+    ports:
+    - containerPort: 8080

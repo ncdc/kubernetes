@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM scratch
-ADD goproxy goproxy
+FROM busybox
+ADD execproxytester execproxytester
 EXPOSE 8080
-ENTRYPOINT ["/goproxy"]
+ENTRYPOINT ["/execproxytester"]
