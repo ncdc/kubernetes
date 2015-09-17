@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -58,6 +59,7 @@ func startHTTPServer(httpPort int) {
 	http.HandleFunc("/shutdown", shutdownHandler)
 	http.HandleFunc("/hostName", hostNameHandler)
 	http.HandleFunc("/shell", shellHandler)
+	http.HandleFunc("/upload", uploadHandler)
 	http.HandleFunc("/dial", dialHandler)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", httpPort), nil))
 }
@@ -194,6 +196,43 @@ func shellHandler(w http.ResponseWriter, r *http.Request) {
 	output, err := exec.Command(shellPath, "-c", r.FormValue("shellCommand")).CombinedOutput()
 	assertNoError(err)
 	fmt.Fprintf(w, string(output))
+}
+
+func uploadHandler(w http.ResponseWriter, r *http.Request) {
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Unable to upload file.")
+		log.Printf("Unable to upload file: %s", err)
+		return
+	}
+	defer file.Close()
+
+	f, err := ioutil.TempFile("/uploads", "upload")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Unable to open file for write.")
+		log.Printf("Unable to open file for write: %s", err)
+		return
+	}
+	defer f.Close()
+	if _, err = io.Copy(f, file); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Unable to write file."))
+		log.Printf("Unable to write file: %s", err)
+		return
+	}
+
+	UploadFile := f.Name()
+	if err := os.Chmod(UploadFile, 0700); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Unable to chmod file.")
+		log.Printf("Unable to chmod file: %s", err)
+		return
+	}
+	log.Printf("Wrote upload to %s", UploadFile)
+	w.WriteHeader(http.StatusCreated)
+	fmt.Fprintf(w, UploadFile)
 }
 
 func hostNameHandler(w http.ResponseWriter, r *http.Request) {
