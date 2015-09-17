@@ -195,10 +195,12 @@ func shellHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.FormValue("shellCommand"))
 	log.Printf("%s %s %s\n", shellPath, "-c", r.FormValue("shellCommand"))
 	cmd := exec.Command(shellPath, "-c", r.FormValue("shellCommand"))
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("Error running command: %s", err)
 	}
+	log.Printf("Output: %s", output)
 	fmt.Fprintf(w, string(output))
 }
 

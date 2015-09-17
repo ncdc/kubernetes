@@ -1,7 +1,9 @@
 .PHONY: all netexec image push clean
 
-TAG = 1.1
-PREFIX = gcr.io/google_containers
+TAG = 1.2
+# TODO: update before merge to gcr.io once accepted for merge and image is uploaded
+#PREFIX = gcr.io/google_containers
+PREFIX = stevemilnerrh
 
 all: push
 
