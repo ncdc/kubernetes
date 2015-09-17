@@ -193,8 +193,12 @@ func dialUDP(request string, remoteAddress *net.UDPAddr) (string, error) {
 
 func shellHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.FormValue("shellCommand"))
-	output, err := exec.Command(shellPath, "-c", r.FormValue("shellCommand")).CombinedOutput()
-	assertNoError(err)
+	log.Printf("%s %s %s\n", shellPath, "-c", r.FormValue("shellCommand"))
+	cmd := exec.Command(shellPath, "-c", r.FormValue("shellCommand"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Error running command: %s", err)
+	}
 	fmt.Fprintf(w, string(output))
 }
 
