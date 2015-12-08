@@ -35,6 +35,7 @@ import (
 	cadvisorapi "github.com/google/cadvisor/info/v1"
 	cadvisorapiv2 "github.com/google/cadvisor/info/v2"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/ugorji/go/codec"
 
 	"k8s.io/kubernetes/pkg/api"
 	apierrs "k8s.io/kubernetes/pkg/api/errors"
@@ -639,6 +640,33 @@ type streamAndReply struct {
 	replySent <-chan struct{}
 }
 
+type h2mux struct {
+	w  io.Writer
+	id byte
+}
+
+func (m *h2mux) Write(data []byte) (int, error) {
+	frame := make([]byte, len(data)+1)
+	frame[0] = m.id
+	copy(frame[1:], data)
+
+	mh := codec.MsgpackHandle{}
+	mh.MapType = reflect.TypeOf(map[string]interface{}(nil))
+	enc := codec.NewEncoder(m.w, &mh)
+
+	//_, err := m.w.Write(frame)
+	err := enc.Encode(frame)
+
+	if err != nil {
+		return 0, err
+	}
+	return len(data), nil
+}
+
+func (m *h2mux) Close() error {
+	return nil
+}
+
 func (s *Server) createStreams(request *restful.Request, response *restful.Response) (io.Reader, io.WriteCloser, io.WriteCloser, io.WriteCloser, Closer, bool, bool) {
 	tty := request.QueryParameter(api.ExecTTYParam) == "1"
 	stdin := request.QueryParameter(api.ExecStdinParam) == "1"
@@ -665,6 +693,29 @@ func (s *Server) createStreams(request *restful.Request, response *restful.Respo
 	if expectedStreams == 1 {
 		response.WriteError(http.StatusBadRequest, fmt.Errorf("you must specify at least 1 of stdin, stdout, stderr"))
 		return nil, nil, nil, nil, nil, false, false
+	}
+	glog.Infof("ANDY createStreams, req=%#v", request.Request)
+	if request.Request.ProtoMajor >= 2 {
+		//w := response.ResponseWriter
+		/*
+			hijacker, ok := w.(http.Hijacker)
+			if !ok {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(w, "unable to upgrade: unable to hijack response")
+				return nil, nil, nil, nil, nil, false, false
+			}
+		*/
+
+		//w.Header().Add(httpstream.HeaderConnection, httpstream.HeaderUpgrade)
+		//w.WriteHeader(http.StatusSwitchingProtocols)
+		/*
+			conn, _, err := hijacker.Hijack()
+			if err != nil {
+				util.HandleError(fmt.Errorf("unable to upgrade: error hijacking response: %v", err))
+				return nil, nil, nil, nil, nil, false, false
+			}
+		*/
+		return request.Request.Body, &h2mux{response.ResponseWriter, 0}, &h2mux{response.ResponseWriter, 1}, &h2mux{response.ResponseWriter, 2}, &h2mux{}, tty, true
 	}
 
 	if wsstream.IsWebSocketRequest(request.Request) {

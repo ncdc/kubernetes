@@ -19,18 +19,22 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"reflect"
 	"syscall"
+
+	"golang.org/x/net/http2"
 
 	"github.com/docker/docker/pkg/term"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
+	"github.com/ugorji/go/codec"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
-	"k8s.io/kubernetes/pkg/client/unversioned/remotecommand"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 )
 
@@ -83,11 +87,92 @@ type RemoteExecutor interface {
 type DefaultRemoteExecutor struct{}
 
 func (*DefaultRemoteExecutor) Execute(method string, url *url.URL, config *restclient.Config, stdin io.Reader, stdout, stderr io.Writer, tty bool) error {
-	exec, err := remotecommand.NewExecutor(config, method, url)
+	/*
+		exec, err := remotecommand.NewExecutor(config, method, url)
+		if err != nil {
+			return err
+		}
+		return exec.Stream(stdin, stdout, stderr, tty)
+	*/
+	tls, err := restclient.TLSConfigFor(config)
 	if err != nil {
 		return err
 	}
-	return exec.Stream(stdin, stdout, stderr, tty)
+	t2 := &http.Transport{
+		TLSClientConfig: tls,
+	}
+	if err := http2.ConfigureTransport(t2); err != nil {
+		return err
+	}
+	w, err := restclient.HTTPWrappersForConfig(config, t2)
+	if err != nil {
+		return err
+	}
+	c := &http.Client{Transport: w}
+	var requestBody io.Reader
+	if stdin != nil {
+		requestBody = stdin
+	}
+	req, err := http.NewRequest(method, url.String(), requestBody)
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Andy", "Upgrade")
+	resp, err := c.Do(req)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\n\nHTTP Response: %#v\n\n", resp)
+	defer resp.Body.Close()
+	/*
+		if tty {
+			io.Copy(stdout, resp.Body)
+		} else {
+			buf := make([]byte, 2048)
+			for {
+				n, err := resp.Body.Read(buf)
+				if err != nil {
+					if err != io.EOF {
+						fmt.Printf("ERROR: %v\n", err)
+					}
+					return err
+				}
+				if n > 0 {
+					switch buf[0] {
+					case 0:
+						// stdout
+						stdout.Write(buf[1:])
+					case 1:
+						// stderr
+						stderr.Write(buf[1:])
+					default:
+						fmt.Printf("BAD STREAM: %d\n", buf[0])
+					}
+				}
+			}
+		}
+	*/
+	mh := codec.MsgpackHandle{}
+	mh.MapType = reflect.TypeOf(map[string]interface{}(nil))
+	dec := codec.NewDecoder(resp.Body, &mh)
+	buf := make([]byte, 32768)
+	for {
+		err = dec.Decode(&buf)
+		if err != nil {
+			return err
+		}
+		switch buf[0] {
+		case 0:
+			// stdout
+			stdout.Write(buf[1:])
+		case 1:
+			// stderr
+			stderr.Write(buf[1:])
+		default:
+			fmt.Printf("BAD STREAM: %d\n", buf[0])
+		}
+	}
+	return nil
 }
 
 // ExecOptions declare the arguments accepted by the Exec command

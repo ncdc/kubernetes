@@ -25,8 +25,9 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/http2"
+
 	"k8s.io/kubernetes/pkg/api/errors"
-	"k8s.io/kubernetes/pkg/util/httpstream"
 	"k8s.io/kubernetes/pkg/util/net"
 	"k8s.io/kubernetes/pkg/util/proxy"
 
@@ -58,6 +59,11 @@ type ErrorResponder interface {
 // NewUpgradeAwareProxyHandler creates a new proxy handler with a default flush interval. Responder is required for returning
 // errors to the caller.
 func NewUpgradeAwareProxyHandler(location *url.URL, transport http.RoundTripper, wrapTransport, upgradeRequired bool, responder ErrorResponder) *UpgradeAwareProxyHandler {
+	if t, ok := transport.(*http.Transport); ok {
+		if err := http2.ConfigureTransport(t); err != nil {
+			glog.Infof("PROXY error enabling http2: %v", err)
+		}
+	}
 	return &UpgradeAwareProxyHandler{
 		Location:        location,
 		Transport:       transport,
@@ -127,8 +133,46 @@ func (h *UpgradeAwareProxyHandler) ServeHTTP(w http.ResponseWriter, req *http.Re
 
 // tryUpgrade returns true if the request was handled.
 func (h *UpgradeAwareProxyHandler) tryUpgrade(w http.ResponseWriter, req *http.Request) bool {
-	if !httpstream.IsUpgradeRequest(req) {
+	/*
+		if !httpstream.IsUpgradeRequest(req) {
+			return false
+		}
+	*/
+	if req.Header.Get("Andy") != "Upgrade" {
 		return false
+	}
+
+	if req.ProtoAtLeast(2, 0) {
+		newReq, err := http.NewRequest(req.Method, h.Location.String(), req.Body)
+		if err != nil {
+			h.Responder.Error(err)
+			return true
+		}
+		newReq.Header = req.Header
+		glog.Infof("PROXY newReq=%#v", newReq)
+		glog.Infof("PROXY transport=%#v", h.Transport)
+		resp, err := h.Transport.RoundTrip(newReq)
+		if err != nil {
+			h.Responder.Error(err)
+			return true
+		}
+		glog.Infof("PROXY RT done")
+		defer resp.Body.Close()
+		for header, values := range resp.Header {
+			for i := range values {
+				glog.Infof("PROXY header %s=%s", header, values[i])
+				w.Header().Add(header, values[i])
+			}
+		}
+		glog.Infof("PROXY status=%d", resp.StatusCode)
+		w.WriteHeader(resp.StatusCode)
+		glog.Infof("PROXY copying body")
+		_, err = io.Copy(w, resp.Body)
+		glog.Infof("PROXY copying body DONE")
+		if err != nil {
+			h.Responder.Error(err)
+		}
+		return true
 	}
 
 	backendConn, err := proxy.DialURL(h.Location, h.Transport)

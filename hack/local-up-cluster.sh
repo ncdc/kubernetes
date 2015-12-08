@@ -259,6 +259,7 @@ function start_apiserver {
 
     APISERVER_LOG=/tmp/kube-apiserver.log
     sudo -E "${GO_OUT}/kube-apiserver" ${priv_arg} ${runtime_config}\
+      --basic-auth-file=`pwd`/htpasswd \
       --v=${LOG_LEVEL} \
       --cert-dir="${CERT_DIR}" \
       --service-account-key-file="${SERVICE_ACCOUNT_KEY}" \
@@ -266,6 +267,7 @@ function start_apiserver {
       --admission-control="${ADMISSION_CONTROL}" \
       --insecure-bind-address="${API_HOST}" \
       --insecure-port="${API_PORT}" \
+      --secure-port=6443 \
       --etcd-servers="http://127.0.0.1:4001" \
       --service-cluster-ip-range="10.0.0.0/24" \
       --cors-allowed-origins="${API_CORS_ALLOWED_ORIGINS}" >"${APISERVER_LOG}" 2>&1 &
