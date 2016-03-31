@@ -1634,7 +1634,11 @@ func (dm *DockerManager) createPodInfraContainer(pod *api.Pod) (kubecontainer.Do
 
 	// No pod secrets for the infra container.
 	// The message isn't needed for the Infra container
-	if err, msg := dm.imagePuller.PullImage(pod, container, nil); err != nil {
+	pullSecrets := []api.Secret{}
+	if dm.podInfraContainerImagePullSecret != nil {
+		pullSecrets = append(pullSecrets, *dm.podInfraContainerImagePullSecret)
+	}
+	if err, msg := dm.imagePuller.PullImage(pod, container, pullSecrets); err != nil {
 		return "", err, msg
 	}
 
