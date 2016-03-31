@@ -211,6 +211,7 @@ func DeepCopy_componentconfig_KubeletConfiguration(in KubeletConfiguration, out 
 	out.CertDirectory = in.CertDirectory
 	out.HostnameOverride = in.HostnameOverride
 	out.PodInfraContainerImage = in.PodInfraContainerImage
+	out.PodInfraContainerImagePullSecret = in.PodInfraContainerImagePullSecret
 	out.DockerEndpoint = in.DockerEndpoint
 	out.RootDirectory = in.RootDirectory
 	out.AllowPrivileged = in.AllowPrivileged
