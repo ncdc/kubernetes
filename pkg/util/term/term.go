@@ -22,6 +22,7 @@ import (
 	"os"
 
 	"github.com/docker/docker/pkg/term"
+
 	"k8s.io/kubernetes/pkg/util/interrupt"
 	"k8s.io/kubernetes/pkg/util/runtime"
 )
@@ -116,21 +117,16 @@ type Size struct {
 	Height uint16
 }
 
-// GetSize returns the current size of the user's terminal. If t.In is nil or it doesn't have a file
-// description, nil is returned.
+// GetSize returns the current size of the user's terminal. If it isn't a terminal,
+// nil is returned.
 func (t TTY) GetSize() *Size {
-	if t.In == nil {
+	// use stdout stream because Windows requires it. In Mac and Linux also stdin would work.
+	_, stdout, _ := term.StdStreams()
+	fd, isTerm := term.GetFdInfo(stdout)
+	if !isTerm {
 		return nil
 	}
-
-	in := t.In
-
-	desc, ok := in.(fd)
-	if !ok {
-		return nil
-	}
-
-	return GetSize(desc.Fd())
+	return GetSize(fd)
 }
 
 // GetSize returns the current size of the terminal associated with fd.
@@ -198,8 +194,13 @@ func (s *sizeQueue) monitorSize(initialSizes ...*Size) {
 	}
 
 	resizeEvents := make(chan Size, 1)
-	// TTY.MonitorSize ensures we have a terminal, so it's safe to assume that s.t.In implements fd.
-	monitorResizeEvents(s.t.In.(fd).Fd(), resizeEvents, s.stopResizing)
+
+	_, stdout, _ := term.StdStreams()
+	fd, isTerm := term.GetFdInfo(stdout)
+	if !isTerm {
+		return
+	}
+	monitorResizeEvents(fd, resizeEvents, s.stopResizing)
 
 	// listen for resize events in the background
 	go func() {
