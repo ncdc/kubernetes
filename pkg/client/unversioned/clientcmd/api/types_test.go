@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -59,7 +59,13 @@ func Example_ofOptionsConfig() {
 		Token: "my-secret-token",
 	}
 	defaultConfig.AuthInfos["black-mage-via-auth-provider"] = &AuthInfo{
-		AuthProvider: &AuthProviderConfig{Name: "gcp"},
+		AuthProvider: &AuthProviderConfig{
+			Name: "gcp",
+			Config: map[string]string{
+				"foo":   "bar",
+				"token": "s3cr3t-t0k3n",
+			},
+		},
 	}
 	defaultConfig.Contexts["bravo-as-black-mage"] = &Context{
 		Cluster:   "bravo",
@@ -115,6 +121,9 @@ func Example_ofOptionsConfig() {
 	//   black-mage-via-auth-provider:
 	//     LocationOfOrigin: ""
 	//     auth-provider:
+	//       config:
+	//         foo: bar
+	//         token: s3cr3t-t0k3n
 	//       name: gcp
 	//   red-mage-via-token:
 	//     LocationOfOrigin: ""

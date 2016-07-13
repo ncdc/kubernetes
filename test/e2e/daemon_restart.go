@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -199,8 +199,7 @@ var _ = framework.KubeDescribe("DaemonRestart [Disruptive]", func() {
 
 	BeforeEach(func() {
 		// These tests require SSH
-		// TODO(11834): Enable this test in GKE once experimental API there is switched on
-		framework.SkipUnlessProviderIs("gce", "aws")
+		framework.SkipUnlessProviderIs(framework.ProvidersWithSSH...)
 		ns = f.Namespace.Name
 
 		// All the restart tests need an rc and a watch on pods of the rc.
@@ -209,7 +208,7 @@ var _ = framework.KubeDescribe("DaemonRestart [Disruptive]", func() {
 			Client:      f.Client,
 			Name:        rcName,
 			Namespace:   ns,
-			Image:       "gcr.io/google_containers/pause:2.0",
+			Image:       framework.GetPauseImageName(f.Client),
 			Replicas:    numPods,
 			CreatedPods: &[]*api.Pod{},
 		}
@@ -252,6 +251,8 @@ var _ = framework.KubeDescribe("DaemonRestart [Disruptive]", func() {
 
 	It("Controller Manager should not create/delete replicas across restart", func() {
 
+		// Requires master ssh access.
+		framework.SkipUnlessProviderIs("gce", "aws")
 		restarter := NewRestartConfig(
 			framework.GetMasterHost(), "kube-controller", ports.ControllerManagerPort, restartPollInterval, restartTimeout)
 		restarter.restart()
@@ -281,6 +282,8 @@ var _ = framework.KubeDescribe("DaemonRestart [Disruptive]", func() {
 
 	It("Scheduler should continue assigning pods to nodes across restart", func() {
 
+		// Requires master ssh access.
+		framework.SkipUnlessProviderIs("gce", "aws")
 		restarter := NewRestartConfig(
 			framework.GetMasterHost(), "kube-scheduler", ports.SchedulerPort, restartPollInterval, restartTimeout)
 

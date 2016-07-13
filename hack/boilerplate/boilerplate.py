@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2015 The Kubernetes Authors All rights reserved.
+# Copyright 2015 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -105,7 +105,8 @@ def file_passes(filename, refs, regexs):
 def file_extension(filename):
     return os.path.splitext(filename)[1].split(".")[-1].lower()
 
-skipped_dirs = ['Godeps', 'third_party', '_gopath', '_output', '.git', 'cluster/env.sh', 'vendor']
+skipped_dirs = ['Godeps', 'third_party', '_gopath', '_output', '.git', 'cluster/env.sh', "vendor", "test/e2e/generated/bindata.go"]
+
 def normalize_files(files):
     newfiles = []
     for pathname in files:

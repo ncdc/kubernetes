@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors All rights reserved.
+Copyright 2016 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,7 +18,8 @@ package federation_release_1_3
 
 import (
 	"github.com/golang/glog"
-	v1alpha1federation "k8s.io/kubernetes/federation/client/clientset_generated/federation_release_1_3/typed/federation/v1alpha1"
+	v1core "k8s.io/kubernetes/federation/client/clientset_generated/federation_release_1_3/typed/core/v1"
+	v1beta1federation "k8s.io/kubernetes/federation/client/clientset_generated/federation_release_1_3/typed/federation/v1beta1"
 	restclient "k8s.io/kubernetes/pkg/client/restclient"
 	discovery "k8s.io/kubernetes/pkg/client/typed/discovery"
 	"k8s.io/kubernetes/pkg/util/flowcontrol"
@@ -26,19 +27,32 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
-	Federation() v1alpha1federation.FederationInterface
+	Federation() v1beta1federation.FederationInterface
+	Core() v1core.CoreInterface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	*v1alpha1federation.FederationClient
+	*v1beta1federation.FederationClient
+	*v1core.CoreClient
 }
 
 // Federation retrieves the FederationClient
-func (c *Clientset) Federation() v1alpha1federation.FederationInterface {
+func (c *Clientset) Federation() v1beta1federation.FederationInterface {
+	if c == nil {
+		return nil
+	}
 	return c.FederationClient
+}
+
+// Core retrieves the CoreClient
+func (c *Clientset) Core() v1core.CoreInterface {
+	if c == nil {
+		return nil
+	}
+	return c.CoreClient
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -54,23 +68,29 @@ func NewForConfig(c *restclient.Config) (*Clientset, error) {
 	}
 	var clientset Clientset
 	var err error
-	clientset.FederationClient, err = v1alpha1federation.NewForConfig(&configShallowCopy)
+	clientset.FederationClient, err = v1beta1federation.NewForConfig(&configShallowCopy)
 	if err != nil {
-		return &clientset, err
+		return nil, err
+	}
+	clientset.CoreClient, err = v1core.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
 	}
 
 	clientset.DiscoveryClient, err = discovery.NewDiscoveryClientForConfig(&configShallowCopy)
 	if err != nil {
 		glog.Errorf("failed to create the DiscoveryClient: %v", err)
+		return nil, err
 	}
-	return &clientset, err
+	return &clientset, nil
 }
 
 // NewForConfigOrDie creates a new Clientset for the given config and
 // panics if there is an error in the config.
 func NewForConfigOrDie(c *restclient.Config) *Clientset {
 	var clientset Clientset
-	clientset.FederationClient = v1alpha1federation.NewForConfigOrDie(c)
+	clientset.FederationClient = v1beta1federation.NewForConfigOrDie(c)
+	clientset.CoreClient = v1core.NewForConfigOrDie(c)
 
 	clientset.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &clientset
@@ -79,7 +99,8 @@ func NewForConfigOrDie(c *restclient.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c *restclient.RESTClient) *Clientset {
 	var clientset Clientset
-	clientset.FederationClient = v1alpha1federation.New(c)
+	clientset.FederationClient = v1beta1federation.New(c)
+	clientset.CoreClient = v1core.New(c)
 
 	clientset.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &clientset

@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors All rights reserved.
+Copyright 2016 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ type ResourceEncodingConfig interface {
 	// StorageEncoding returns the serialization format for the resource.
 	// TODO this should actually return a GroupVersionKind since you can logically have multiple "matching" Kinds
 	// For now, it returns just the GroupVersion for consistency with old behavior
-	StoragageEncodingFor(unversioned.GroupResource) (unversioned.GroupVersion, error)
+	StorageEncodingFor(unversioned.GroupResource) (unversioned.GroupVersion, error)
 
 	// InMemoryEncodingFor returns the groupVersion for the in memory representation the storage should convert to.
 	InMemoryEncodingFor(unversioned.GroupResource) (unversioned.GroupVersion, error)
@@ -78,7 +78,7 @@ func (o *DefaultResourceEncodingConfig) SetResourceEncoding(resourceBeingStored 
 	o.Groups[group].InternalResourceEncodings[resourceBeingStored.Resource] = internalVersion
 }
 
-func (o *DefaultResourceEncodingConfig) StoragageEncodingFor(resource unversioned.GroupResource) (unversioned.GroupVersion, error) {
+func (o *DefaultResourceEncodingConfig) StorageEncodingFor(resource unversioned.GroupResource) (unversioned.GroupVersion, error) {
 	groupMeta, err := registered.Group(resource.Group)
 	if err != nil {
 		return unversioned.GroupVersion{}, err

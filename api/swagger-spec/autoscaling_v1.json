@@ -1,7 +1,7 @@
 {
   "swaggerVersion": "1.2",
   "apiVersion": "autoscaling/v1",
-  "basePath": "https://10.10.10.10:443",
+  "basePath": "https://10.10.10.10:6443",
   "resourcePath": "/apis/autoscaling/v1",
   "apis": [
    {
@@ -792,6 +792,53 @@
     "operations": [
      {
       "type": "v1.HorizontalPodAutoscaler",
+      "method": "GET",
+      "summary": "read status of the specified HorizontalPodAutoscaler",
+      "nickname": "readNamespacedHorizontalPodAutoscalerStatus",
+      "parameters": [
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "pretty",
+        "description": "If 'true', then the output is pretty printed.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "path",
+        "name": "namespace",
+        "description": "object name and auth scope, such as for teams and projects",
+        "required": true,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "path",
+        "name": "name",
+        "description": "name of the HorizontalPodAutoscaler",
+        "required": true,
+        "allowMultiple": false
+       }
+      ],
+      "responseMessages": [
+       {
+        "code": 200,
+        "message": "OK",
+        "responseModel": "v1.HorizontalPodAutoscaler"
+       }
+      ],
+      "produces": [
+       "application/json",
+       "application/yaml",
+       "application/vnd.kubernetes.protobuf"
+      ],
+      "consumes": [
+       "*/*"
+      ]
+     },
+     {
+      "type": "v1.HorizontalPodAutoscaler",
       "method": "PUT",
       "summary": "replace status of the specified HorizontalPodAutoscaler",
       "nickname": "replaceNamespacedHorizontalPodAutoscalerStatus",
@@ -843,6 +890,63 @@
       ],
       "consumes": [
        "*/*"
+      ]
+     },
+     {
+      "type": "v1.HorizontalPodAutoscaler",
+      "method": "PATCH",
+      "summary": "partially update status of the specified HorizontalPodAutoscaler",
+      "nickname": "patchNamespacedHorizontalPodAutoscalerStatus",
+      "parameters": [
+       {
+        "type": "string",
+        "paramType": "query",
+        "name": "pretty",
+        "description": "If 'true', then the output is pretty printed.",
+        "required": false,
+        "allowMultiple": false
+       },
+       {
+        "type": "unversioned.Patch",
+        "paramType": "body",
+        "name": "body",
+        "description": "",
+        "required": true,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "path",
+        "name": "namespace",
+        "description": "object name and auth scope, such as for teams and projects",
+        "required": true,
+        "allowMultiple": false
+       },
+       {
+        "type": "string",
+        "paramType": "path",
+        "name": "name",
+        "description": "name of the HorizontalPodAutoscaler",
+        "required": true,
+        "allowMultiple": false
+       }
+      ],
+      "responseMessages": [
+       {
+        "code": 200,
+        "message": "OK",
+        "responseModel": "v1.HorizontalPodAutoscaler"
+       }
+      ],
+      "produces": [
+       "application/json",
+       "application/yaml",
+       "application/vnd.kubernetes.protobuf"
+      ],
+      "consumes": [
+       "application/json-patch+json",
+       "application/merge-patch+json",
+       "application/strategic-merge-patch+json"
       ]
      }
     ]
@@ -993,6 +1097,52 @@
      "annotations": {
       "type": "object",
       "description": "Annotations is an unstructured key value map stored with a resource that may be set by external tools to store and retrieve arbitrary metadata. They are not queryable and should be preserved when modifying objects. More info: http://releases.k8s.io/HEAD/docs/user-guide/annotations.md"
+     },
+     "ownerReferences": {
+      "type": "array",
+      "items": {
+       "$ref": "v1.OwnerReference"
+      },
+      "description": "List of objects depended by this object. If ALL objects in the list have been deleted, this object will be garbage collected. If this object is managed by a controller, then an entry in this list will point to this controller, with the controller field set to true. There cannot be more than one managing controller."
+     },
+     "finalizers": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Must be empty before the object is deleted from the registry. Each entry is an identifier for the responsible component that will remove the entry from the list. If the deletionTimestamp of the object is non-nil, entries in this list can only be removed."
+     }
+    }
+   },
+   "v1.OwnerReference": {
+    "id": "v1.OwnerReference",
+    "description": "OwnerReference contains enough information to let you identify an owning object. Currently, an owning object must be in the same namespace, so there is no namespace field.",
+    "required": [
+     "apiVersion",
+     "kind",
+     "name",
+     "uid"
+    ],
+    "properties": {
+     "apiVersion": {
+      "type": "string",
+      "description": "API version of the referent."
+     },
+     "kind": {
+      "type": "string",
+      "description": "Kind of the referent. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#types-kinds"
+     },
+     "name": {
+      "type": "string",
+      "description": "Name of the referent. More info: http://releases.k8s.io/HEAD/docs/user-guide/identifiers.md#names"
+     },
+     "uid": {
+      "type": "string",
+      "description": "UID of the referent. More info: http://releases.k8s.io/HEAD/docs/user-guide/identifiers.md#uids"
+     },
+     "controller": {
+      "type": "boolean",
+      "description": "If true, this reference points to the managing controller."
      }
     }
    },
@@ -1197,6 +1347,10 @@
      "preconditions": {
       "$ref": "v1.Preconditions",
       "description": "Must be fulfilled before a deletion is carried out. If not possible, a 409 Conflict status will be returned."
+     },
+     "orphanDependents": {
+      "type": "boolean",
+      "description": "Should the dependent objects be orphaned. If true/false, the \"orphan\" finalizer will be added to/removed from the object's finalizers list."
      }
     }
    },

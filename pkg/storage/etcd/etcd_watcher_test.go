@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -218,6 +218,74 @@ func TestWatchInterpretation_ResponseBadData(t *testing.T) {
 		})
 		w.Stop()
 	}
+}
+
+func TestSendResultDeleteEventHaveLatestIndex(t *testing.T) {
+	codec := testapi.Default.Codec()
+	filter := func(obj runtime.Object) bool {
+		return obj.(*api.Pod).Name != "bar"
+	}
+	w := newEtcdWatcher(false, false, nil, filter, codec, versioner, nil, &fakeEtcdCache{})
+
+	eventChan := make(chan watch.Event, 1)
+	w.emit = func(e watch.Event) {
+		eventChan <- e
+	}
+
+	fooPod := &api.Pod{ObjectMeta: api.ObjectMeta{Name: "foo"}}
+	barPod := &api.Pod{ObjectMeta: api.ObjectMeta{Name: "bar"}}
+	fooBytes, err := runtime.Encode(codec, fooPod)
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+	barBytes, err := runtime.Encode(codec, barPod)
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+
+	tests := []struct {
+		response *etcd.Response
+		expRV    string
+	}{{ // Delete event
+		response: &etcd.Response{
+			Action: EtcdDelete,
+			Node: &etcd.Node{
+				ModifiedIndex: 2,
+			},
+			PrevNode: &etcd.Node{
+				Value:         string(fooBytes),
+				ModifiedIndex: 1,
+			},
+		},
+		expRV: "2",
+	}, { // Modify event with uninterested data
+		response: &etcd.Response{
+			Action: EtcdSet,
+			Node: &etcd.Node{
+				Value:         string(barBytes),
+				ModifiedIndex: 2,
+			},
+			PrevNode: &etcd.Node{
+				Value:         string(fooBytes),
+				ModifiedIndex: 1,
+			},
+		},
+		expRV: "2",
+	}}
+
+	for i, tt := range tests {
+		w.sendResult(tt.response)
+		ev := <-eventChan
+		if ev.Type != watch.Deleted {
+			t.Errorf("#%d: event type want=Deleted, get=%s", i, ev.Type)
+			return
+		}
+		rv := ev.Object.(*api.Pod).ResourceVersion
+		if rv != tt.expRV {
+			t.Errorf("#%d: resource version want=%s, get=%s", i, tt.expRV, rv)
+		}
+	}
+	w.Stop()
 }
 
 func TestWatch(t *testing.T) {

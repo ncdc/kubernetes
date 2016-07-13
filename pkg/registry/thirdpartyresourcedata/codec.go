@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -33,13 +33,16 @@ import (
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util/sets"
+	"k8s.io/kubernetes/pkg/util/yaml"
+	"k8s.io/kubernetes/pkg/watch/versioned"
 )
 
 type thirdPartyObjectConverter struct {
 	converter runtime.ObjectConvertor
 }
 
-func (t *thirdPartyObjectConverter) ConvertToVersion(in runtime.Object, outVersion string) (out runtime.Object, err error) {
+func (t *thirdPartyObjectConverter) ConvertToVersion(in runtime.Object, outVersion unversioned.GroupVersion) (out runtime.Object, err error) {
 	switch in.(type) {
 	// This seems weird, but in this case the ThirdPartyResourceData is really just a wrapper on the raw 3rd party data.
 	// The actual thing printed/sent to server is the actual raw third party resource data, which only has one version.
@@ -167,7 +170,7 @@ func NewMapper(mapper meta.RESTMapper, kind, version, group string) meta.RESTMap
 }
 
 type thirdPartyResourceDataCodecFactory struct {
-	runtime.NegotiatedSerializer
+	delegate runtime.NegotiatedSerializer
 	kind     string
 	encodeGV unversioned.GroupVersion
 	decodeGV unversioned.GroupVersion
@@ -175,43 +178,67 @@ type thirdPartyResourceDataCodecFactory struct {
 
 func NewNegotiatedSerializer(s runtime.NegotiatedSerializer, kind string, encodeGV, decodeGV unversioned.GroupVersion) runtime.NegotiatedSerializer {
 	return &thirdPartyResourceDataCodecFactory{
-		NegotiatedSerializer: s,
-
+		delegate: s,
 		kind:     kind,
 		encodeGV: encodeGV,
 		decodeGV: decodeGV,
 	}
 }
 
-func (t *thirdPartyResourceDataCodecFactory) EncoderForVersion(s runtime.Serializer, gv unversioned.GroupVersion) runtime.Encoder {
-	return NewCodec(runtime.NewCodec(
-		t.NegotiatedSerializer.EncoderForVersion(s, gv),
-		t.NegotiatedSerializer.DecoderToVersion(s, t.decodeGV),
-	), t.kind)
+func (t *thirdPartyResourceDataCodecFactory) SupportedMediaTypes() []string {
+	supported := sets.NewString(t.delegate.SupportedMediaTypes()...)
+	return supported.Intersection(sets.NewString("application/json", "application/yaml")).List()
 }
 
-func (t *thirdPartyResourceDataCodecFactory) DecoderToVersion(s runtime.Serializer, gv unversioned.GroupVersion) runtime.Decoder {
-	return NewCodec(runtime.NewCodec(
-		t.NegotiatedSerializer.EncoderForVersion(s, t.encodeGV),
-		t.NegotiatedSerializer.DecoderToVersion(s, gv),
-	), t.kind)
+func (t *thirdPartyResourceDataCodecFactory) SerializerForMediaType(mediaType string, params map[string]string) (runtime.SerializerInfo, bool) {
+	switch mediaType {
+	case "application/json", "application/yaml":
+		return t.delegate.SerializerForMediaType(mediaType, params)
+	default:
+		return runtime.SerializerInfo{}, false
+	}
 }
 
-type thirdPartyResourceDataCodec struct {
-	delegate runtime.Codec
+func (t *thirdPartyResourceDataCodecFactory) SupportedStreamingMediaTypes() []string {
+	supported := sets.NewString(t.delegate.SupportedStreamingMediaTypes()...)
+	return supported.Intersection(sets.NewString("application/json", "application/json;stream=watch")).List()
+}
+
+func (t *thirdPartyResourceDataCodecFactory) StreamingSerializerForMediaType(mediaType string, params map[string]string) (runtime.StreamSerializerInfo, bool) {
+	switch mediaType {
+	case "application/json", "application/json;stream=watch":
+		return t.delegate.StreamingSerializerForMediaType(mediaType, params)
+	default:
+		return runtime.StreamSerializerInfo{}, false
+	}
+}
+
+func (t *thirdPartyResourceDataCodecFactory) EncoderForVersion(s runtime.Encoder, gv unversioned.GroupVersion) runtime.Encoder {
+	return &thirdPartyResourceDataEncoder{delegate: t.delegate.EncoderForVersion(s, gv), gvk: gv.WithKind(t.kind)}
+}
+
+func (t *thirdPartyResourceDataCodecFactory) DecoderToVersion(s runtime.Decoder, gv unversioned.GroupVersion) runtime.Decoder {
+	return NewDecoder(t.delegate.DecoderToVersion(s, gv), t.kind)
+}
+
+func NewCodec(delegate runtime.Codec, gvk unversioned.GroupVersionKind) runtime.Codec {
+	return runtime.NewCodec(NewEncoder(delegate, gvk), NewDecoder(delegate, gvk.Kind))
+}
+
+type thirdPartyResourceDataDecoder struct {
+	delegate runtime.Decoder
 	kind     string
 }
 
-var _ runtime.Codec = &thirdPartyResourceDataCodec{}
-
-func NewCodec(codec runtime.Codec, kind string) runtime.Codec {
-	return &thirdPartyResourceDataCodec{codec, kind}
+func NewDecoder(delegate runtime.Decoder, kind string) runtime.Decoder {
+	return &thirdPartyResourceDataDecoder{delegate: delegate, kind: kind}
 }
+
+var _ runtime.Decoder = &thirdPartyResourceDataDecoder{}
 
 func parseObject(data []byte) (map[string]interface{}, error) {
 	var obj interface{}
 	if err := json.Unmarshal(data, &obj); err != nil {
-		fmt.Printf("Invalid JSON:\n%s\n", string(data))
 		return nil, err
 	}
 	mapObj, ok := obj.(map[string]interface{})
@@ -221,7 +248,7 @@ func parseObject(data []byte) (map[string]interface{}, error) {
 	return mapObj, nil
 }
 
-func (t *thirdPartyResourceDataCodec) populate(data []byte) (runtime.Object, error) {
+func (t *thirdPartyResourceDataDecoder) populate(data []byte) (runtime.Object, error) {
 	mapObj, err := parseObject(data)
 	if err != nil {
 		return nil, err
@@ -229,19 +256,20 @@ func (t *thirdPartyResourceDataCodec) populate(data []byte) (runtime.Object, err
 	return t.populateFromObject(mapObj, data)
 }
 
-func (t *thirdPartyResourceDataCodec) populateFromObject(mapObj map[string]interface{}, data []byte) (runtime.Object, error) {
+func (t *thirdPartyResourceDataDecoder) populateFromObject(mapObj map[string]interface{}, data []byte) (runtime.Object, error) {
 	typeMeta := unversioned.TypeMeta{}
 	if err := json.Unmarshal(data, &typeMeta); err != nil {
 		return nil, err
 	}
-	switch typeMeta.Kind {
-	case t.kind:
+	isList := strings.HasSuffix(typeMeta.Kind, "List")
+	switch {
+	case !isList && (len(t.kind) == 0 || typeMeta.Kind == t.kind):
 		result := &extensions.ThirdPartyResourceData{}
 		if err := t.populateResource(result, mapObj, data); err != nil {
 			return nil, err
 		}
 		return result, nil
-	case t.kind + "List":
+	case isList && (len(t.kind) == 0 || typeMeta.Kind == t.kind+"List"):
 		list := &extensions.ThirdPartyResourceDataList{}
 		if err := t.populateListResource(list, mapObj); err != nil {
 			return nil, err
@@ -252,7 +280,7 @@ func (t *thirdPartyResourceDataCodec) populateFromObject(mapObj map[string]inter
 	}
 }
 
-func (t *thirdPartyResourceDataCodec) populateResource(objIn *extensions.ThirdPartyResourceData, mapObj map[string]interface{}, data []byte) error {
+func (t *thirdPartyResourceDataDecoder) populateResource(objIn *extensions.ThirdPartyResourceData, mapObj map[string]interface{}, data []byte) error {
 	metadata, ok := mapObj["metadata"].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("unexpected object for metadata: %#v", mapObj["metadata"])
@@ -274,19 +302,73 @@ func (t *thirdPartyResourceDataCodec) populateResource(objIn *extensions.ThirdPa
 	return nil
 }
 
-func (t *thirdPartyResourceDataCodec) Decode(data []byte, gvk *unversioned.GroupVersionKind, into runtime.Object) (runtime.Object, *unversioned.GroupVersionKind, error) {
+func IsThirdPartyObject(rawData []byte, gvk *unversioned.GroupVersionKind) (isThirdParty bool, gvkOut *unversioned.GroupVersionKind, err error) {
+	var gv unversioned.GroupVersion
+	if gvk == nil {
+		data, err := yaml.ToJSON(rawData)
+		if err != nil {
+			return false, nil, err
+		}
+		metadata := unversioned.TypeMeta{}
+		if err = json.Unmarshal(data, &metadata); err != nil {
+			return false, nil, err
+		}
+		gv, err = unversioned.ParseGroupVersion(metadata.APIVersion)
+		if err != nil {
+			return false, nil, err
+		}
+		gvkOut = &unversioned.GroupVersionKind{
+			Group:   gv.Group,
+			Version: gv.Version,
+			Kind:    metadata.Kind,
+		}
+	} else {
+		gv = gvk.GroupVersion()
+		gvkOut = gvk
+	}
+	return registered.IsThirdPartyAPIGroupVersion(gv), gvkOut, nil
+}
+
+func (t *thirdPartyResourceDataDecoder) Decode(data []byte, gvk *unversioned.GroupVersionKind, into runtime.Object) (runtime.Object, *unversioned.GroupVersionKind, error) {
 	if into == nil {
+		if gvk == nil || gvk.Kind != t.kind {
+			if isThirdParty, _, err := IsThirdPartyObject(data, gvk); err != nil {
+				return nil, nil, err
+			} else if !isThirdParty {
+				return t.delegate.Decode(data, gvk, into)
+			}
+		}
 		obj, err := t.populate(data)
 		if err != nil {
 			return nil, nil, err
 		}
 		return obj, gvk, nil
 	}
-	thirdParty, ok := into.(*extensions.ThirdPartyResourceData)
-	if !ok {
-		return nil, nil, fmt.Errorf("unexpected object: %#v", into)
+	switch o := into.(type) {
+	case *extensions.ThirdPartyResourceData:
+		break
+	case *runtime.VersionedObjects:
+		// We're not sure that it's third party, we need to test
+		if gvk == nil || gvk.Kind != t.kind {
+			if isThirdParty, _, err := IsThirdPartyObject(data, gvk); err != nil {
+				return nil, nil, err
+			} else if !isThirdParty {
+				return t.delegate.Decode(data, gvk, into)
+			}
+		}
+		obj, err := t.populate(data)
+		if err != nil {
+			return nil, nil, err
+		}
+		o.Objects = []runtime.Object{
+			obj,
+		}
+		return o, gvk, nil
+	default:
+		return t.delegate.Decode(data, gvk, into)
 	}
 
+	thirdParty := into.(*extensions.ThirdPartyResourceData)
 	var dataObj interface{}
 	if err := json.Unmarshal(data, &dataObj); err != nil {
 		return nil, nil, err
@@ -311,10 +393,10 @@ func (t *thirdPartyResourceDataCodec) Decode(data []byte, gvk *unversioned.Group
 		if !ok {
 			return nil, nil, fmt.Errorf("unexpected object for 'kind': %v", kindObj)
 		}
-		if kindStr != t.kind {
+		if len(t.kind) > 0 && kindStr != t.kind {
 			return nil, nil, fmt.Errorf("kind doesn't match, expecting: %s, got %s", gvk.Kind, kindStr)
 		}
-		actual.Kind = t.kind
+		actual.Kind = kindStr
 	}
 	if versionObj, found := mapObj["apiVersion"]; !found {
 		if gvk == nil {
@@ -347,7 +429,7 @@ func (t *thirdPartyResourceDataCodec) Decode(data []byte, gvk *unversioned.Group
 	return thirdParty, actual, nil
 }
 
-func (t *thirdPartyResourceDataCodec) populateListResource(objIn *extensions.ThirdPartyResourceDataList, mapObj map[string]interface{}) error {
+func (t *thirdPartyResourceDataDecoder) populateListResource(objIn *extensions.ThirdPartyResourceDataList, mapObj map[string]interface{}) error {
 	items, ok := mapObj["items"].([]interface{})
 	if !ok {
 		return fmt.Errorf("unexpected object for items: %#v", mapObj["items"])
@@ -371,8 +453,21 @@ func (t *thirdPartyResourceDataCodec) populateListResource(objIn *extensions.Thi
 
 const template = `{
   "kind": "%s",
+  "apiVersion": "%s",
+  "metadata": {},
   "items": [ %s ]
 }`
+
+type thirdPartyResourceDataEncoder struct {
+	delegate runtime.Encoder
+	gvk      unversioned.GroupVersionKind
+}
+
+func NewEncoder(delegate runtime.Encoder, gvk unversioned.GroupVersionKind) runtime.Encoder {
+	return &thirdPartyResourceDataEncoder{delegate: delegate, gvk: gvk}
+}
+
+var _ runtime.Encoder = &thirdPartyResourceDataEncoder{}
 
 func encodeToJSON(obj *extensions.ThirdPartyResourceData, stream io.Writer) error {
 	var objOut interface{}
@@ -388,7 +483,7 @@ func encodeToJSON(obj *extensions.ThirdPartyResourceData, stream io.Writer) erro
 	return encoder.Encode(objMap)
 }
 
-func (t *thirdPartyResourceDataCodec) EncodeToStream(obj runtime.Object, stream io.Writer, overrides ...unversioned.GroupVersion) (err error) {
+func (t *thirdPartyResourceDataEncoder) Encode(obj runtime.Object, stream io.Writer) (err error) {
 	switch obj := obj.(type) {
 	case *extensions.ThirdPartyResourceData:
 		return encodeToJSON(obj, stream)
@@ -403,10 +498,25 @@ func (t *thirdPartyResourceDataCodec) EncodeToStream(obj runtime.Object, stream 
 			}
 			dataStrings[ix] = buff.String()
 		}
-		fmt.Fprintf(stream, template, t.kind+"List", strings.Join(dataStrings, ","))
+		gv := t.gvk.GroupVersion()
+		fmt.Fprintf(stream, template, t.gvk.Kind+"List", gv.String(), strings.Join(dataStrings, ","))
+		return nil
+	case *versioned.InternalEvent:
+		event := &versioned.Event{}
+		err := versioned.Convert_versioned_InternalEvent_to_versioned_Event(obj, event, nil)
+		if err != nil {
+			return err
+		}
+
+		enc := json.NewEncoder(stream)
+		err = enc.Encode(event)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	case *unversioned.Status, *unversioned.APIResourceList:
-		return t.delegate.EncodeToStream(obj, stream, overrides...)
+		return t.delegate.Encode(obj, stream)
 	default:
 		return fmt.Errorf("unexpected object to encode: %#v", obj)
 	}

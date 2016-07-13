@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,13 +17,14 @@ limitations under the License.
 package daemon
 
 import (
+	"fmt"
 	"reflect"
 	"sort"
 	"sync"
 	"time"
 
-	"fmt"
 	"github.com/golang/glog"
+
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/validation"
@@ -108,7 +109,7 @@ type DaemonSetsController struct {
 	queue *workqueue.Type
 }
 
-func NewDaemonSetsController(podInformer framework.SharedInformer, kubeClient clientset.Interface, resyncPeriod controller.ResyncPeriodFunc, lookupCacheSize int) *DaemonSetsController {
+func NewDaemonSetsController(podInformer framework.SharedIndexInformer, kubeClient clientset.Interface, resyncPeriod controller.ResyncPeriodFunc, lookupCacheSize int) *DaemonSetsController {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(glog.Infof)
 	// TODO: remove the wrapper when every clients have moved to use the clientset.
@@ -168,11 +169,7 @@ func NewDaemonSetsController(podInformer framework.SharedInformer, kubeClient cl
 				glog.V(4).Infof("Updating daemon set %s", oldDS.Name)
 				dsc.enqueueDaemonSet(curDS)
 			},
-			DeleteFunc: func(obj interface{}) {
-				ds := obj.(*extensions.DaemonSet)
-				glog.V(4).Infof("Deleting daemon set %s", ds.Name)
-				dsc.enqueueDaemonSet(ds)
-			},
+			DeleteFunc: dsc.deleteDaemonset,
 		},
 	)
 
@@ -183,7 +180,7 @@ func NewDaemonSetsController(podInformer framework.SharedInformer, kubeClient cl
 		UpdateFunc: dsc.updatePod,
 		DeleteFunc: dsc.deletePod,
 	})
-	dsc.podStore.Store = podInformer.GetStore()
+	dsc.podStore.Indexer = podInformer.GetIndexer()
 	dsc.podController = podInformer.GetController()
 	dsc.podStoreSynced = podInformer.HasSynced
 
@@ -210,11 +207,29 @@ func NewDaemonSetsController(podInformer framework.SharedInformer, kubeClient cl
 }
 
 func NewDaemonSetsControllerFromClient(kubeClient clientset.Interface, resyncPeriod controller.ResyncPeriodFunc, lookupCacheSize int) *DaemonSetsController {
-	podInformer := informers.CreateSharedPodInformer(kubeClient, resyncPeriod())
+	podInformer := informers.CreateSharedPodIndexInformer(kubeClient, resyncPeriod())
 	dsc := NewDaemonSetsController(podInformer, kubeClient, resyncPeriod, lookupCacheSize)
 	dsc.internalPodInformer = podInformer
 
 	return dsc
+}
+
+func (dsc *DaemonSetsController) deleteDaemonset(obj interface{}) {
+	ds, ok := obj.(*extensions.DaemonSet)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			glog.Errorf("Couldn't get object from tombstone %+v", obj)
+			return
+		}
+		ds, ok = tombstone.Obj.(*extensions.DaemonSet)
+		if !ok {
+			glog.Errorf("Tombstone contained object that is not a DaemonSet %+v", obj)
+			return
+		}
+	}
+	glog.V(4).Infof("Deleting daemon set %s", ds.Name)
+	dsc.enqueueDaemonSet(ds)
 }
 
 // Run begins watching and syncing daemon sets.
@@ -225,7 +240,7 @@ func (dsc *DaemonSetsController) Run(workers int, stopCh <-chan struct{}) {
 	go dsc.podController.Run(stopCh)
 	go dsc.nodeController.Run(stopCh)
 	for i := 0; i < workers; i++ {
-		go wait.Until(dsc.worker, time.Second, stopCh)
+		go wait.Until(dsc.runWorker, time.Second, stopCh)
 	}
 
 	if dsc.internalPodInformer != nil {
@@ -237,31 +252,17 @@ func (dsc *DaemonSetsController) Run(workers int, stopCh <-chan struct{}) {
 	dsc.queue.ShutDown()
 }
 
-func (dsc *DaemonSetsController) worker() {
+func (dsc *DaemonSetsController) runWorker() {
 	for {
-		func() {
-			dsKey, quit := dsc.queue.Get()
-			if quit {
-				return
-			}
-			defer dsc.queue.Done(dsKey)
-			err := dsc.syncHandler(dsKey.(string))
-			if err != nil {
-				glog.Errorf("Error syncing daemon set with key %s: %v", dsKey.(string), err)
-			}
-		}()
-	}
-}
-
-func (dsc *DaemonSetsController) enqueueAllDaemonSets() {
-	glog.V(4).Infof("Enqueueing all daemon sets")
-	ds, err := dsc.dsStore.List()
-	if err != nil {
-		glog.Errorf("Error enqueueing daemon sets: %v", err)
-		return
-	}
-	for i := range ds.Items {
-		dsc.enqueueDaemonSet(&ds.Items[i])
+		dsKey, quit := dsc.queue.Get()
+		if quit {
+			continue
+		}
+		err := dsc.syncHandler(dsKey.(string))
+		if err != nil {
+			glog.Errorf("Error syncing daemon set with key %s: %v", dsKey.(string), err)
+		}
+		dsc.queue.Done(dsKey)
 	}
 }
 
@@ -285,7 +286,7 @@ func (dsc *DaemonSetsController) getPodDaemonSet(pod *api.Pod) *extensions.Daemo
 			glog.Errorf("lookup cache does not retuen a ReplicationController object")
 			return nil
 		}
-		if cached && dsc.isCacheValid(pod, ds) {
+		if dsc.isCacheValid(pod, ds) {
 			return ds
 		}
 	}
@@ -484,17 +485,18 @@ func (dsc *DaemonSetsController) manage(ds *extensions.DaemonSet) {
 
 		daemonPods, isRunning := nodeToDaemonPods[node.Name]
 
-		if shouldRun && !isRunning {
+		switch {
+		case shouldRun && !isRunning:
 			// If daemon pod is supposed to be running on node, but isn't, create daemon pod.
 			nodesNeedingDaemonPods = append(nodesNeedingDaemonPods, node.Name)
-		} else if shouldRun && len(daemonPods) > 1 {
+		case shouldRun && len(daemonPods) > 1:
 			// If daemon pod is supposed to be running on node, but more than 1 daemon pod is running, delete the excess daemon pods.
 			// Sort the daemon pods by creation time, so the the oldest is preserved.
 			sort.Sort(podByCreationTimestamp(daemonPods))
 			for i := 1; i < len(daemonPods); i++ {
 				podsToDelete = append(podsToDelete, daemonPods[i].Name)
 			}
-		} else if !shouldRun && isRunning {
+		case !shouldRun && isRunning:
 			// If daemon pod isn't supposed to run on node, but it is, delete all daemon pods on node.
 			for i := range daemonPods {
 				podsToDelete = append(podsToDelete, daemonPods[i].Name)
@@ -686,7 +688,7 @@ func (dsc *DaemonSetsController) nodeShouldRunDaemonPod(node *api.Node, ds *exte
 	newPod.Spec.NodeName = node.Name
 	pods := []*api.Pod{newPod}
 
-	for _, m := range dsc.podStore.Store.List() {
+	for _, m := range dsc.podStore.Indexer.List() {
 		pod := m.(*api.Pod)
 		if pod.Spec.NodeName != node.Name {
 			continue
@@ -701,8 +703,8 @@ func (dsc *DaemonSetsController) nodeShouldRunDaemonPod(node *api.Node, ds *exte
 		}
 		pods = append(pods, pod)
 	}
-	_, notFittingCPU, notFittingMemory := predicates.CheckPodsExceedingFreeResources(pods, node.Status.Allocatable)
-	if len(notFittingCPU)+len(notFittingMemory) != 0 {
+	_, notFittingCPU, notFittingMemory, notFittingNvidiaGPU := predicates.CheckPodsExceedingFreeResources(pods, node.Status.Allocatable)
+	if len(notFittingCPU)+len(notFittingMemory)+len(notFittingNvidiaGPU) != 0 {
 		dsc.eventRecorder.Eventf(ds, api.EventTypeNormal, "FailedPlacement", "failed to place pod on %q: insufficent free resources", node.ObjectMeta.Name)
 		return false
 	}

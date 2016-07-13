@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -63,6 +63,40 @@ func currentMigrationRules() map[string]string {
 	return migrationRules
 }
 
+type ClientConfigLoader interface {
+	ConfigAccess
+	Load() (*clientcmdapi.Config, error)
+}
+
+type KubeconfigGetter func() (*clientcmdapi.Config, error)
+
+type ClientConfigGetter struct {
+	kubeconfigGetter KubeconfigGetter
+}
+
+// ClientConfigGetter implements the ClientConfigLoader interface.
+var _ ClientConfigLoader = &ClientConfigGetter{}
+
+func (g *ClientConfigGetter) Load() (*clientcmdapi.Config, error) {
+	return g.kubeconfigGetter()
+}
+
+func (g *ClientConfigGetter) GetLoadingPrecedence() []string {
+	return nil
+}
+func (g *ClientConfigGetter) GetStartingConfig() (*clientcmdapi.Config, error) {
+	return nil, nil
+}
+func (g *ClientConfigGetter) GetDefaultFilename() string {
+	return ""
+}
+func (g *ClientConfigGetter) IsExplicitFile() bool {
+	return false
+}
+func (g *ClientConfigGetter) GetExplicitFile() string {
+	return ""
+}
+
 // ClientConfigLoadingRules is an ExplicitPath and string slice of specific locations that are used for merging together a Config
 // Callers can put the chain together however they want, but we'd recommend:
 // EnvVarPathFiles if set (a list of files if set) OR the HomeDirectoryPath
@@ -79,6 +113,9 @@ type ClientConfigLoadingRules struct {
 	// that a default object that doesn't set this will usually get the behavior it wants.
 	DoNotResolvePaths bool
 }
+
+// ClientConfigLoadingRules implements the ClientConfigLoader interface.
+var _ ClientConfigLoader = &ClientConfigLoadingRules{}
 
 // NewDefaultClientConfigLoadingRules returns a ClientConfigLoadingRules object with default fields filled in.  You are not required to
 // use this constructor
@@ -229,6 +266,54 @@ func (rules *ClientConfigLoadingRules) Migrate() error {
 	return nil
 }
 
+// GetLoadingPrecedence implements ConfigAccess
+func (rules *ClientConfigLoadingRules) GetLoadingPrecedence() []string {
+	return rules.Precedence
+}
+
+// GetStartingConfig implements ConfigAccess
+func (rules *ClientConfigLoadingRules) GetStartingConfig() (*clientcmdapi.Config, error) {
+	clientConfig := NewNonInteractiveDeferredLoadingClientConfig(rules, &ConfigOverrides{})
+	rawConfig, err := clientConfig.RawConfig()
+	if os.IsNotExist(err) {
+		return clientcmdapi.NewConfig(), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &rawConfig, nil
+}
+
+// GetDefaultFilename implements ConfigAccess
+func (rules *ClientConfigLoadingRules) GetDefaultFilename() string {
+	// Explicit file if we have one.
+	if rules.IsExplicitFile() {
+		return rules.GetExplicitFile()
+	}
+	// Otherwise, first existing file from precedence.
+	for _, filename := range rules.GetLoadingPrecedence() {
+		if _, err := os.Stat(filename); err == nil {
+			return filename
+		}
+	}
+	// If none exists, use the first from precedence.
+	if len(rules.Precedence) > 0 {
+		return rules.Precedence[0]
+	}
+	return ""
+}
+
+// IsExplicitFile implements ConfigAccess
+func (rules *ClientConfigLoadingRules) IsExplicitFile() bool {
+	return len(rules.ExplicitPath) > 0
+}
+
+// GetExplicitFile implements ConfigAccess
+func (rules *ClientConfigLoadingRules) GetExplicitFile() string {
+	return rules.ExplicitPath
+}
+
 // LoadFromFile takes a filename and deserializes the contents into Config object
 func LoadFromFile(filename string) (*clientcmdapi.Config, error) {
 	kubeconfigBytes, err := ioutil.ReadFile(filename)
@@ -296,10 +381,38 @@ func WriteToFile(config clientcmdapi.Config, filename string) error {
 			return err
 		}
 	}
+
 	if err := ioutil.WriteFile(filename, content, 0600); err != nil {
 		return err
 	}
 	return nil
+}
+
+func lockFile(filename string) error {
+	// TODO: find a way to do this with actual file locks. Will
+	// probably need seperate solution for windows and linux.
+
+	// Make sure the dir exists before we try to create a lock file.
+	dir := filepath.Dir(filename)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err = os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+	}
+	f, err := os.OpenFile(lockName(filename), os.O_CREATE|os.O_EXCL, 0)
+	if err != nil {
+		return err
+	}
+	f.Close()
+	return nil
+}
+
+func unlockFile(filename string) error {
+	return os.Remove(lockName(filename))
+}
+
+func lockName(filename string) string {
+	return filename + ".lock"
 }
 
 // Write serializes the config to yaml.

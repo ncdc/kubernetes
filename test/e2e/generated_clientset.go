@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/pkg/util/intstr"
 	"k8s.io/kubernetes/pkg/watch"
@@ -46,7 +47,7 @@ func testingPod(name, value string) v1.Pod {
 			Containers: []v1.Container{
 				{
 					Name:  "nginx",
-					Image: "gcr.io/google_containers/nginx:1.7.9",
+					Image: "gcr.io/google_containers/nginx-slim:0.7",
 					Ports: []v1.ContainerPort{{ContainerPort: 80}},
 					LivenessProbe: &v1.Probe{
 						Handler: v1.Handler{
@@ -74,7 +75,7 @@ func observePodCreation(w watch.Interface) {
 	}
 }
 
-func observePodDeletion(w watch.Interface) (lastPod *api.Pod) {
+func observeObjectDeletion(w watch.Interface) (obj runtime.Object) {
 	deleted := false
 	timeout := false
 	timer := time.After(60 * time.Second)
@@ -82,7 +83,7 @@ func observePodDeletion(w watch.Interface) (lastPod *api.Pod) {
 		select {
 		case event, _ := <-w.ResultChan():
 			if event.Type == watch.Deleted {
-				lastPod = event.Object.(*api.Pod)
+				obj = event.Object
 				deleted = true
 			}
 		case <-timer:
@@ -155,7 +156,8 @@ var _ = framework.KubeDescribe("Generated release_1_2 clientset", func() {
 		}
 
 		By("verifying pod deletion was observed")
-		lastPod := observePodDeletion(w)
+		obj := observeObjectDeletion(w)
+		lastPod := obj.(*api.Pod)
 		Expect(lastPod.DeletionTimestamp).ToNot(BeNil())
 		Expect(lastPod.Spec.TerminationGracePeriodSeconds).ToNot(BeZero())
 
@@ -228,7 +230,8 @@ var _ = framework.KubeDescribe("Generated release_1_3 clientset", func() {
 		}
 
 		By("verifying pod deletion was observed")
-		lastPod := observePodDeletion(w)
+		obj := observeObjectDeletion(w)
+		lastPod := obj.(*v1.Pod)
 		Expect(lastPod.DeletionTimestamp).ToNot(BeNil())
 		Expect(lastPod.Spec.TerminationGracePeriodSeconds).ToNot(BeZero())
 

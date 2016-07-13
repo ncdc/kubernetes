@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ import (
 
 func NewEtcdStorage(t *testing.T, group string) (storage.Interface, *etcdtesting.EtcdTestServer) {
 	server := etcdtesting.NewEtcdTestClientServer(t)
-	storage := etcdstorage.NewEtcdStorage(server.Client, testapi.Groups[group].Codec(), etcdtest.PathPrefix(), false, etcdtest.DeserializationCacheSize)
+	storage := etcdstorage.NewEtcdStorage(server.Client, testapi.Groups[group].StorageCodec(), etcdtest.PathPrefix(), false, etcdtest.DeserializationCacheSize)
 	return storage, server
 }
 
@@ -61,6 +61,11 @@ func (t *Tester) TestNamespace() string {
 
 func (t *Tester) ClusterScope() *Tester {
 	t.tester = t.tester.ClusterScope()
+	return t
+}
+
+func (t *Tester) Namer(namer func(int) string) *Tester {
+	t.tester = t.tester.Namer(namer)
 	return t
 }
 
@@ -147,10 +152,11 @@ func (t *Tester) TestWatch(valid runtime.Object, labelsPass, labelsFail []labels
 // =============================================================================
 // get codec based on runtime.Object
 func getCodec(obj runtime.Object) (runtime.Codec, error) {
-	fqKind, err := api.Scheme.ObjectKind(obj)
+	fqKinds, _, err := api.Scheme.ObjectKinds(obj)
 	if err != nil {
 		return nil, fmt.Errorf("unexpected encoding error: %v", err)
 	}
+	fqKind := fqKinds[0]
 	// TODO: caesarxuchao: we should detect which group an object belongs to
 	// by using the version returned by Schem.ObjectVersionAndKind() once we
 	// split the schemes for internal objects.

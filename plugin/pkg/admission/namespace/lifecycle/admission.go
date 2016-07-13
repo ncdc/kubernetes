@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ const PluginName = "NamespaceLifecycle"
 
 func init() {
 	admission.RegisterPlugin(PluginName, func(client clientset.Interface, config io.Reader) (admission.Interface, error) {
-		return NewLifecycle(client, sets.NewString(api.NamespaceDefault)), nil
+		return NewLifecycle(client, sets.NewString(api.NamespaceDefault, api.NamespaceSystem)), nil
 	})
 }
 

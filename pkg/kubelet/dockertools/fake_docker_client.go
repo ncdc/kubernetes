@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import (
 	dockercontainer "github.com/docker/engine-api/types/container"
 
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/util/sets"
 )
 
 // FakeDockerClient is a simple fake docker client, so that kubelet can be run for testing without requiring a real docker setup.
@@ -49,7 +48,6 @@ type FakeDockerClient struct {
 	Created         []string
 	Stopped         []string
 	Removed         []string
-	RemovedImages   sets.String
 	VersionInfo     dockertypes.Version
 	Information     dockertypes.Info
 	ExecInspect     *dockertypes.ContainerExecInspect
@@ -68,10 +66,9 @@ func NewFakeDockerClient() *FakeDockerClient {
 
 func NewFakeDockerClientWithVersion(version, apiVersion string) *FakeDockerClient {
 	return &FakeDockerClient{
-		VersionInfo:   dockertypes.Version{Version: version, APIVersion: apiVersion},
-		Errors:        make(map[string]error),
-		RemovedImages: sets.String{},
-		ContainerMap:  make(map[string]*dockertypes.ContainerJSON),
+		VersionInfo:  dockertypes.Version{Version: version, APIVersion: apiVersion},
+		Errors:       make(map[string]error),
+		ContainerMap: make(map[string]*dockertypes.ContainerJSON),
 	}
 }
 
@@ -422,14 +419,14 @@ func (f *FakeDockerClient) Logs(id string, opts dockertypes.ContainerLogsOptions
 
 // PullImage is a test-spy implementation of DockerInterface.PullImage.
 // It adds an entry "pull" to the internal method call record.
-func (f *FakeDockerClient) PullImage(imageID string, auth dockertypes.AuthConfig, opts dockertypes.ImagePullOptions) error {
+func (f *FakeDockerClient) PullImage(image string, auth dockertypes.AuthConfig, opts dockertypes.ImagePullOptions) error {
 	f.Lock()
 	defer f.Unlock()
 	f.called = append(f.called, "pull")
 	err := f.popError("pull")
 	if err == nil {
 		authJson, _ := json.Marshal(auth)
-		f.pulled = append(f.pulled, fmt.Sprintf("%s:%s using %s", imageID, opts.Tag, string(authJson)))
+		f.pulled = append(f.pulled, fmt.Sprintf("%s using %s", image, string(authJson)))
 	}
 	return err
 }
@@ -471,6 +468,7 @@ func (f *FakeDockerClient) InspectExec(id string) (*dockertypes.ContainerExecIns
 }
 
 func (f *FakeDockerClient) ListImages(opts dockertypes.ImageListOptions) ([]dockertypes.Image, error) {
+	f.called = append(f.called, "list_images")
 	err := f.popError("list_images")
 	return f.Images, err
 }
@@ -478,7 +476,12 @@ func (f *FakeDockerClient) ListImages(opts dockertypes.ImageListOptions) ([]dock
 func (f *FakeDockerClient) RemoveImage(image string, opts dockertypes.ImageRemoveOptions) ([]dockertypes.ImageDelete, error) {
 	err := f.popError("remove_image")
 	if err == nil {
-		f.RemovedImages.Insert(image)
+		for i := range f.Images {
+			if f.Images[i].ID == image {
+				f.Images = append(f.Images[:i], f.Images[i+1:]...)
+				break
+			}
+		}
 	}
 	return []dockertypes.ImageDelete{{Deleted: image}}, err
 }
@@ -495,6 +498,20 @@ func (f *FakeDockerClient) updateContainerStatus(id, status string) {
 			f.RunningContainerList[i].Status = status
 		}
 	}
+}
+
+func (f *FakeDockerClient) ResizeExecTTY(id string, height, width int) error {
+	f.Lock()
+	defer f.Unlock()
+	f.called = append(f.called, "resize_exec")
+	return nil
+}
+
+func (f *FakeDockerClient) ResizeContainerTTY(id string, height, width int) error {
+	f.Lock()
+	defer f.Unlock()
+	f.called = append(f.called, "resize_container")
+	return nil
 }
 
 // FakeDockerPuller is a stub implementation of DockerPuller.
@@ -538,6 +555,7 @@ func (f *FakeDockerPuller) IsImagePresent(name string) (bool, error) {
 func (f *FakeDockerClient) ImageHistory(id string) ([]dockertypes.ImageHistory, error) {
 	f.Lock()
 	defer f.Unlock()
+	f.called = append(f.called, "image_history")
 	history := f.ImageHistoryMap[id]
 	return history, nil
 }

@@ -1,4 +1,4 @@
-# Copyright 2016 The Kubernetes Authors All rights reserved.
+# Copyright 2016 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 TAG?=0.5.5
 ARCH?=amd64
 REGISTRY?=gcr.io/google_containers
-KUBE_CROSS_TAG=v1.6.0-2
+KUBE_CROSS_TAG=$(shell cat ../../../build-image/cross/VERSION)
 GOARM=6
 TEMP_DIR:=$(shell mktemp -d)
 BASEIMAGE?=gcr.io/google_containers/debian-iptables-${ARCH}:v2

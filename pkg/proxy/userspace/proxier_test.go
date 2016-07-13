@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -85,16 +86,17 @@ func waitForClosedPortUDP(p *Proxier, proxyPort int) error {
 var tcpServerPort int32
 var udpServerPort int32
 
-func init() {
+func TestMain(m *testing.M) {
 	// Don't handle panics
 	runtime.ReallyCrash = true
 
 	// TCP setup.
-	// TODO: Close() this when fix #19254
 	tcp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(r.URL.Path[1:]))
 	}))
+	defer tcp.Close()
+
 	u, err := url.Parse(tcp.URL)
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse: %v", err))
@@ -124,6 +126,11 @@ func init() {
 	}
 	udpServerPort = int32(udpServerPortValue)
 	go udp.Loop()
+
+	ret := m.Run()
+	// it should be safe to call Close() multiple times.
+	tcp.Close()
+	os.Exit(ret)
 }
 
 func testEchoTCP(t *testing.T, address string, port int) {
@@ -269,9 +276,9 @@ func TestUDPProxyTimeout(t *testing.T) {
 	}
 	waitForNumProxyLoops(t, p, 1)
 	testEchoUDP(t, "127.0.0.1", svcInfo.proxyPort)
-	// When connecting to a UDP service endpoint, there shoule be a Conn for proxy.
+	// When connecting to a UDP service endpoint, there should be a Conn for proxy.
 	waitForNumProxyClients(t, svcInfo, 1, time.Second)
-	// If conn has no activity for serviceInfo.timeout since last Read/Write, it shoule be closed because of timeout.
+	// If conn has no activity for serviceInfo.timeout since last Read/Write, it should be closed because of timeout.
 	waitForNumProxyClients(t, svcInfo, 0, 2*time.Second)
 }
 

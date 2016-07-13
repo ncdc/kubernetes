@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors All rights reserved.
+Copyright 2016 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,7 +34,13 @@ func execute(method string, url *url.URL, config *restclient.Config, stdin io.Re
 	if err != nil {
 		return err
 	}
-	return exec.Stream(remotecommandserver.SupportedStreamingProtocols, stdin, stdout, stderr, tty)
+	return exec.Stream(remotecommand.StreamOptions{
+		SupportedProtocols: remotecommandserver.SupportedStreamingProtocols,
+		Stdin:              stdin,
+		Stdout:             stdout,
+		Stderr:             stderr,
+		Tty:                tty,
+	})
 }
 
 func execCommandInContainer(config *restclient.Config, c *client.Client, ns, podName, containerName string, cmd []string) (string, error) {

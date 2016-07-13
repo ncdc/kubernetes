@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 
 type lengthDelimitedFrameWriter struct {
 	w io.Writer
+	h [4]byte
 }
 
 func NewLengthDelimitedFrameWriter(w io.Writer) io.Writer {
@@ -34,13 +35,12 @@ func NewLengthDelimitedFrameWriter(w io.Writer) io.Writer {
 // Write writes a single frame to the nested writer, prepending it with the length in
 // in bytes of data (as a 4 byte, bigendian uint32).
 func (w *lengthDelimitedFrameWriter) Write(data []byte) (int, error) {
-	header := [4]byte{}
-	binary.BigEndian.PutUint32(header[:], uint32(len(data)))
-	n, err := w.w.Write(header[:])
+	binary.BigEndian.PutUint32(w.h[:], uint32(len(data)))
+	n, err := w.w.Write(w.h[:])
 	if err != nil {
 		return 0, err
 	}
-	if n != len(header) {
+	if n != len(w.h) {
 		return 0, io.ErrShortWrite
 	}
 	return w.w.Write(data)
@@ -145,6 +145,7 @@ func (r *jsonFrameReader) Read(data []byte) (int, error) {
 
 	// RawMessage#Unmarshal appends to data - we reset the slice down to 0 and will either see
 	// data written to data, or be larger than data and a different array.
+	n := len(data)
 	m := json.RawMessage(data[:0])
 	if err := r.decoder.Decode(&m); err != nil {
 		return 0, err
@@ -153,7 +154,7 @@ func (r *jsonFrameReader) Read(data []byte) (int, error) {
 	// If capacity of data is less than length of the message, decoder will allocate a new slice
 	// and set m to it, which means we need to copy the partial result back into data and preserve
 	// the remaining result for subsequent reads.
-	if n := cap(data); len(m) > n {
+	if len(m) > n {
 		data = append(data[0:0], m[:n]...)
 		r.remaining = m[n:]
 		return n, io.ErrShortBuffer

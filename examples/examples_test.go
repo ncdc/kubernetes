@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -170,9 +170,6 @@ func walkJSONFiles(inDir string, fn func(name, path string, data []byte)) error 
 
 func TestExampleObjectSchemas(t *testing.T) {
 	cases := map[string]map[string]runtime.Object{
-		"../cmd/integration": {
-			"v1-controller": &api.ReplicationController{},
-		},
 		"../examples/guestbook": {
 			"frontend-deployment":     &extensions.Deployment{},
 			"redis-slave-deployment":  &extensions.Deployment{},
@@ -333,7 +330,6 @@ func TestExampleObjectSchemas(t *testing.T) {
 		},
 		"../docs/user-guide/node-selection": {
 			"pod": &api.Pod{},
-			"pod-with-node-affinity": &api.Pod{},
 		},
 		"../examples/openshift-origin": {
 			"openshift-origin-namespace": &api.Namespace{},

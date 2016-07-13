@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors All rights reserved.
+Copyright 2016 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/kubernetes/cmd/libs/go2idl/client-gen/testdata/apis/testgroup.k8s.io/v1"
+	"k8s.io/kubernetes/cmd/libs/go2idl/client-gen/test_apis/testgroup.k8s.io/v1"
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/kubernetes/pkg/api/unversioned"

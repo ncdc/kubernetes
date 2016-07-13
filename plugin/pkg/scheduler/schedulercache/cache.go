@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -35,14 +35,14 @@ var (
 // It automatically starts a go routine that manages expiration of assumed pods.
 // "ttl" is how long the assumed pod will get expired.
 // "stop" is the channel that would close the background goroutine.
-func New(ttl time.Duration, stop chan struct{}) Cache {
+func New(ttl time.Duration, stop <-chan struct{}) Cache {
 	cache := newSchedulerCache(ttl, cleanAssumedPeriod, stop)
 	cache.run()
 	return cache
 }
 
 type schedulerCache struct {
-	stop   chan struct{}
+	stop   <-chan struct{}
 	ttl    time.Duration
 	period time.Duration
 
@@ -62,7 +62,7 @@ type podState struct {
 	deadline *time.Time
 }
 
-func newSchedulerCache(ttl, period time.Duration, stop chan struct{}) *schedulerCache {
+func newSchedulerCache(ttl, period time.Duration, stop <-chan struct{}) *schedulerCache {
 	return &schedulerCache{
 		ttl:    ttl,
 		period: period,

@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ type genFakeForType struct {
 	generator.DefaultGen
 	outputPackage string
 	group         string
+	inputPackage  string
 	version       string
 	typeToMatch   *types.Type
 	imports       namer.ImportTracker
@@ -87,6 +88,20 @@ func (g *genFakeForType) GenerateType(c *generator.Context, t *types.Type, w io.
 	if canonicalVersion == "unversioned" {
 		canonicalVersion = ""
 	}
+
+	groupName := g.group
+	if g.group == "core" {
+		groupName = ""
+	}
+
+	// allow user to define a group name that's different from the one parsed from the directory.
+	for _, comment := range c.Universe.Package(g.inputPackage).DocComments {
+		comment = strings.TrimLeft(comment, "//")
+		if override, ok := types.ExtractCommentTags("+", comment)["groupName"]; ok {
+			groupName = override
+		}
+	}
+
 	m := map[string]interface{}{
 		"type":                 t,
 		"package":              pkg,
@@ -94,11 +109,13 @@ func (g *genFakeForType) GenerateType(c *generator.Context, t *types.Type, w io.
 		"namespaced":           namespaced,
 		"Group":                namer.IC(g.group),
 		"group":                canonicalGroup,
+		"groupName":            groupName,
 		"version":              canonicalVersion,
 		"watchInterface":       c.Universe.Type(types.Name{Package: "k8s.io/kubernetes/pkg/watch", Name: "Interface"}),
 		"apiDeleteOptions":     c.Universe.Type(types.Name{Package: "k8s.io/kubernetes/pkg/api", Name: "DeleteOptions"}),
 		"apiListOptions":       c.Universe.Type(types.Name{Package: "k8s.io/kubernetes/pkg/api", Name: "ListOptions"}),
 		"GroupVersionResource": c.Universe.Type(types.Name{Package: "k8s.io/kubernetes/pkg/api/unversioned", Name: "GroupVersionResource"}),
+		"PatchType":            c.Universe.Type(types.Name{Package: "k8s.io/kubernetes/pkg/api", Name: "PatchType"}),
 		"Everything":           c.Universe.Function(types.Name{Package: "k8s.io/kubernetes/pkg/labels", Name: "Everything"}),
 
 		"NewRootListAction":              c.Universe.Function(types.Name{Package: pkgTestingCore, Name: "NewRootListAction"}),
@@ -117,6 +134,8 @@ func (g *genFakeForType) GenerateType(c *generator.Context, t *types.Type, w io.
 		"NewWatchAction":                 c.Universe.Function(types.Name{Package: pkgTestingCore, Name: "NewWatchAction"}),
 		"NewUpdateSubresourceAction":     c.Universe.Function(types.Name{Package: pkgTestingCore, Name: "NewUpdateSubresourceAction"}),
 		"NewRootUpdateSubresourceAction": c.Universe.Function(types.Name{Package: pkgTestingCore, Name: "NewRootUpdateSubresourceAction"}),
+		"NewRootPatchAction":             c.Universe.Function(types.Name{Package: pkgTestingCore, Name: "NewRootPatchAction"}),
+		"NewPatchAction":                 c.Universe.Function(types.Name{Package: pkgTestingCore, Name: "NewPatchAction"}),
 	}
 
 	noMethods := types.ExtractCommentTags("+", t.SecondClosestCommentLines)["noMethods"] == "true"
@@ -144,7 +163,7 @@ func (g *genFakeForType) GenerateType(c *generator.Context, t *types.Type, w io.
 			sw.Do(listTemplate, m)
 		}
 		sw.Do(watchTemplate, m)
-
+		sw.Do(patchTemplate, m)
 	}
 
 	return sw.Error()
@@ -168,7 +187,7 @@ type Fake$.type|publicPlural$ struct {
 `
 
 var resource = `
-var $.type|allLowercasePlural$Resource = $.GroupVersionResource|raw${Group: "$.group$", Version: "$.version$", Resource: "$.type|allLowercasePlural$"}
+var $.type|allLowercasePlural$Resource = $.GroupVersionResource|raw${Group: "$.groupName$", Version: "$.version$", Resource: "$.type|allLowercasePlural$"}
 `
 
 var listTemplate = `
@@ -279,5 +298,18 @@ func (c *Fake$.type|publicPlural$) Watch(opts $.apiListOptions|raw$) ($.watchInt
 	return c.Fake.
 		$if .namespaced$InvokesWatch($.NewWatchAction|raw$($.type|allLowercasePlural$Resource, c.ns, opts))
 		$else$InvokesWatch($.NewRootWatchAction|raw$($.type|allLowercasePlural$Resource, opts))$end$
+}
+`
+
+var patchTemplate = `
+// Patch applies the patch and returns the patched $.type|private$.
+func (c *Fake$.type|publicPlural$) Patch(name string, pt $.PatchType|raw$, data []byte) (result *$.type|raw$, err error) {
+	obj, err := c.Fake.
+		$if .namespaced$Invokes($.NewPatchAction|raw$($.type|allLowercasePlural$Resource, c.ns, name, data), &$.type|raw${})
+		$else$Invokes($.NewRootPatchAction|raw$($.type|allLowercasePlural$Resource, name, data), &$.type|raw${})$end$
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*$.type|raw$), err
 }
 `

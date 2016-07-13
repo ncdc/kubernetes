@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@ import (
 	"net/url"
 	"testing"
 
-	testgroup "k8s.io/kubernetes/cmd/libs/go2idl/client-gen/testdata/apis/testgroup.k8s.io"
-	_ "k8s.io/kubernetes/cmd/libs/go2idl/client-gen/testdata/apis/testgroup.k8s.io/install"
+	testgroup "k8s.io/kubernetes/cmd/libs/go2idl/client-gen/test_apis/testgroup.k8s.io"
+	_ "k8s.io/kubernetes/cmd/libs/go2idl/client-gen/test_apis/testgroup.k8s.io/install"
 	. "k8s.io/kubernetes/cmd/libs/go2idl/client-gen/testoutput/clientset_generated/test_internalclientset/typed/testgroup.k8s.io/unversioned"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
@@ -244,4 +244,26 @@ func TestExpansionInterface(t *testing.T) {
 	if e, a := "hello!", c.TestTypes("").Hello(); e != a {
 		t.Errorf("expansion failed")
 	}
+}
+
+func TestPatchTestType(t *testing.T) {
+	ns := api.NamespaceDefault
+	requestTestType := &testgroup.TestType{
+		ObjectMeta: api.ObjectMeta{
+			Name:            "foo",
+			ResourceVersion: "1",
+			Labels: map[string]string{
+				"foo":  "bar",
+				"name": "baz",
+			},
+		},
+	}
+	c := DecoratedSimpleClient{
+		simpleClient: simple.Client{
+			Request:  simple.Request{Method: "PATCH", Path: testHelper.ResourcePath("testtypes", ns, "foo"), Query: simple.BuildQueryValues(nil)},
+			Response: simple.Response{StatusCode: http.StatusOK, Body: requestTestType},
+		},
+	}
+	receivedTestType, err := c.Setup(t).TestTypes(ns).Patch(requestTestType.Name, api.StrategicMergePatchType, []byte{})
+	c.simpleClient.Validate(t, receivedTestType, err)
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors All rights reserved.
+Copyright 2016 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@ limitations under the License.
 package validation
 
 import (
+	"reflect"
+
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	unversionedvalidation "k8s.io/kubernetes/pkg/api/unversioned/validation"
@@ -26,11 +28,13 @@ import (
 	"k8s.io/kubernetes/pkg/util/validation/field"
 )
 
-// ValidatePetSetName can be used to check whether the given PetSet
-// name is valid.
+// ValidatePetSetName can be used to check whether the given PetSet name is valid.
 // Prefix indicates this name will be used as part of generation, in which case
 // trailing dashes are allowed.
-func ValidatePetSetName(name string, prefix bool) (bool, string) {
+func ValidatePetSetName(name string, prefix bool) []string {
+	// TODO: Validate that there's name for the suffix inserted by the pets.
+	// Currently this is just "-index". In the future we may allow a user
+	// specified list of suffixes and we need  to validate the longest one.
 	return apivalidation.NameIsDNSSubdomain(name, prefix)
 }
 
@@ -51,7 +55,7 @@ func ValidatePodTemplateSpecForPetSet(template *api.PodTemplateSpec, selector la
 		// fail. We should really check that the union of the given volumes and volumeClaims match
 		// volume mounts in the containers.
 		// allErrs = append(allErrs, apivalidation.ValidatePodTemplateSpec(template, fldPath)...)
-		allErrs = append(allErrs, apivalidation.ValidateLabels(template.Labels, fldPath.Child("labels"))...)
+		allErrs = append(allErrs, unversionedvalidation.ValidateLabels(template.Labels, fldPath.Child("labels"))...)
 		allErrs = append(allErrs, apivalidation.ValidateAnnotations(template.Annotations, fldPath.Child("annotations"))...)
 		allErrs = append(allErrs, apivalidation.ValidatePodSpecificAnnotations(template.Annotations, fldPath.Child("annotations"))...)
 	}
@@ -96,8 +100,22 @@ func ValidatePetSet(petSet *apps.PetSet) field.ErrorList {
 // ValidatePetSetUpdate tests if required fields in the PetSet are set.
 func ValidatePetSetUpdate(petSet, oldPetSet *apps.PetSet) field.ErrorList {
 	allErrs := field.ErrorList{}
-	allErrs = append(allErrs, apivalidation.ValidateObjectMetaUpdate(&petSet.ObjectMeta, &oldPetSet.ObjectMeta, field.NewPath("metadata"))...)
-	allErrs = append(allErrs, ValidatePetSetSpec(&petSet.Spec, field.NewPath("spec"))...)
+
+	// TODO: For now we're taking the safe route and disallowing all updates to spec except for Spec.Replicas.
+	// Enable on a case by case basis.
+	restoreReplicas := petSet.Spec.Replicas
+	petSet.Spec.Replicas = oldPetSet.Spec.Replicas
+
+	// The generation changes for this update
+	restoreGeneration := petSet.Generation
+	petSet.Generation = oldPetSet.Generation
+
+	if !reflect.DeepEqual(petSet, oldPetSet) {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec"), "updates to petset spec for fields other than 'replicas' are forbidden."))
+	}
+	petSet.Spec.Replicas = restoreReplicas
+	petSet.Generation = restoreGeneration
+	allErrs = append(allErrs, apivalidation.ValidateNonnegativeField(int64(petSet.Spec.Replicas), field.NewPath("spec", "replicas"))...)
 	return allErrs
 }
 

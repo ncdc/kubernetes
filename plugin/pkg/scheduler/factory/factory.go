@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ package factory
 
 import (
 	"fmt"
-	"math/rand"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,6 +34,7 @@ import (
 	"k8s.io/kubernetes/pkg/types"
 	"k8s.io/kubernetes/pkg/util/runtime"
 	"k8s.io/kubernetes/pkg/util/sets"
+	utilvalidation "k8s.io/kubernetes/pkg/util/validation"
 	"k8s.io/kubernetes/plugin/pkg/scheduler"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm/predicates"
@@ -83,10 +84,18 @@ type ConfigFactory struct {
 	// processed by this scheduler, based on pods's annotation key:
 	// 'scheduler.alpha.kubernetes.io/name'
 	SchedulerName string
+
+	// RequiredDuringScheduling affinity is not symmetric, but there is an implicit PreferredDuringScheduling affinity rule
+	// corresponding to every RequiredDuringScheduling affinity rule.
+	// HardPodAffinitySymmetricWeight represents the weight of implicit PreferredDuringScheduling affinity rule, in the range 0-100.
+	HardPodAffinitySymmetricWeight int
+
+	// Indicate the "all topologies" set for empty topologyKey when it's used for PreferredDuringScheduling pod anti-affinity.
+	FailureDomains string
 }
 
 // Initializes the factory.
-func NewConfigFactory(client *client.Client, schedulerName string) *ConfigFactory {
+func NewConfigFactory(client *client.Client, schedulerName string, hardPodAffinitySymmetricWeight int, failureDomains string) *ConfigFactory {
 	stopEverything := make(chan struct{})
 	schedulerCache := schedulercache.New(30*time.Second, stopEverything)
 
@@ -95,15 +104,17 @@ func NewConfigFactory(client *client.Client, schedulerName string) *ConfigFactor
 		PodQueue:           cache.NewFIFO(cache.MetaNamespaceKeyFunc),
 		ScheduledPodLister: &cache.StoreToPodLister{},
 		// Only nodes in the "Ready" condition with status == "True" are schedulable
-		NodeLister:       &cache.StoreToNodeLister{},
-		PVLister:         &cache.StoreToPVFetcher{Store: cache.NewStore(cache.MetaNamespaceKeyFunc)},
-		PVCLister:        &cache.StoreToPVCFetcher{Store: cache.NewStore(cache.MetaNamespaceKeyFunc)},
-		ServiceLister:    &cache.StoreToServiceLister{Store: cache.NewStore(cache.MetaNamespaceKeyFunc)},
-		ControllerLister: &cache.StoreToReplicationControllerLister{Store: cache.NewStore(cache.MetaNamespaceKeyFunc)},
-		ReplicaSetLister: &cache.StoreToReplicaSetLister{Store: cache.NewStore(cache.MetaNamespaceKeyFunc)},
-		schedulerCache:   schedulerCache,
-		StopEverything:   stopEverything,
-		SchedulerName:    schedulerName,
+		NodeLister:                     &cache.StoreToNodeLister{},
+		PVLister:                       &cache.StoreToPVFetcher{Store: cache.NewStore(cache.MetaNamespaceKeyFunc)},
+		PVCLister:                      &cache.StoreToPVCFetcher{Store: cache.NewStore(cache.MetaNamespaceKeyFunc)},
+		ServiceLister:                  &cache.StoreToServiceLister{Store: cache.NewStore(cache.MetaNamespaceKeyFunc)},
+		ControllerLister:               &cache.StoreToReplicationControllerLister{Indexer: cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})},
+		ReplicaSetLister:               &cache.StoreToReplicaSetLister{Store: cache.NewStore(cache.MetaNamespaceKeyFunc)},
+		schedulerCache:                 schedulerCache,
+		StopEverything:                 stopEverything,
+		SchedulerName:                  schedulerName,
+		HardPodAffinitySymmetricWeight: hardPodAffinitySymmetricWeight,
+		FailureDomains:                 failureDomains,
 	}
 
 	c.PodLister = schedulerCache
@@ -112,7 +123,7 @@ func NewConfigFactory(client *client.Client, schedulerName string) *ConfigFactor
 	// We construct this here instead of in CreateFromKeys because
 	// ScheduledPodLister is something we provide to plug in functions that
 	// they may need to call.
-	c.ScheduledPodLister.Store, c.scheduledPodPopulator = framework.NewInformer(
+	c.ScheduledPodLister.Indexer, c.scheduledPodPopulator = framework.NewIndexerInformer(
 		c.createAssignedNonTerminatedPodLW(),
 		&api.Pod{},
 		0,
@@ -121,6 +132,7 @@ func NewConfigFactory(client *client.Client, schedulerName string) *ConfigFactor
 			UpdateFunc: c.updatePodInCache,
 			DeleteFunc: c.deletePodFromCache,
 		},
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 	)
 
 	c.NodeLister.Store, c.nodePopulator = framework.NewInformer(
@@ -287,7 +299,75 @@ func (f *ConfigFactory) CreateFromConfig(policy schedulerapi.Policy) (*scheduler
 // Creates a scheduler from a set of registered fit predicate keys and priority keys.
 func (f *ConfigFactory) CreateFromKeys(predicateKeys, priorityKeys sets.String, extenders []algorithm.SchedulerExtender) (*scheduler.Config, error) {
 	glog.V(2).Infof("creating scheduler with fit predicates '%v' and priority functions '%v", predicateKeys, priorityKeys)
-	pluginArgs := PluginFactoryArgs{
+
+	if f.HardPodAffinitySymmetricWeight < 0 || f.HardPodAffinitySymmetricWeight > 100 {
+		return nil, fmt.Errorf("invalid hardPodAffinitySymmetricWeight: %d, must be in the range 0-100", f.HardPodAffinitySymmetricWeight)
+	}
+
+	predicateFuncs, err := f.GetPredicates(predicateKeys)
+	if err != nil {
+		return nil, err
+	}
+
+	priorityConfigs, err := f.GetPriorityFunctionConfigs(priorityKeys)
+	if err != nil {
+		return nil, err
+	}
+
+	f.Run()
+
+	algo := scheduler.NewGenericScheduler(f.schedulerCache, predicateFuncs, priorityConfigs, extenders)
+
+	podBackoff := podBackoff{
+		perPodBackoff: map[types.NamespacedName]*backoffEntry{},
+		clock:         realClock{},
+
+		defaultDuration: 1 * time.Second,
+		maxDuration:     60 * time.Second,
+	}
+
+	return &scheduler.Config{
+		SchedulerCache: f.schedulerCache,
+		// The scheduler only needs to consider schedulable nodes.
+		NodeLister:          f.NodeLister.NodeCondition(getNodeConditionPredicate()),
+		Algorithm:           algo,
+		Binder:              &binder{f.Client},
+		PodConditionUpdater: &podConditionUpdater{f.Client},
+		NextPod: func() *api.Pod {
+			return f.getNextPod()
+		},
+		Error:          f.makeDefaultErrorFunc(&podBackoff, f.PodQueue),
+		StopEverything: f.StopEverything,
+	}, nil
+}
+
+func (f *ConfigFactory) GetPriorityFunctionConfigs(priorityKeys sets.String) ([]algorithm.PriorityConfig, error) {
+	pluginArgs, err := f.getPluginArgs()
+	if err != nil {
+		return nil, err
+	}
+
+	return getPriorityFunctionConfigs(priorityKeys, *pluginArgs)
+}
+
+func (f *ConfigFactory) GetPredicates(predicateKeys sets.String) (map[string]algorithm.FitPredicate, error) {
+	pluginArgs, err := f.getPluginArgs()
+	if err != nil {
+		return nil, err
+	}
+
+	return getFitPredicateFunctions(predicateKeys, *pluginArgs)
+}
+
+func (f *ConfigFactory) getPluginArgs() (*PluginFactoryArgs, error) {
+	failureDomainArgs := strings.Split(f.FailureDomains, ",")
+	for _, failureDomain := range failureDomainArgs {
+		if errs := utilvalidation.IsQualifiedName(failureDomain); len(errs) != 0 {
+			return nil, fmt.Errorf("invalid failure domain: %q: %s", failureDomain, strings.Join(errs, ";"))
+		}
+	}
+
+	return &PluginFactoryArgs{
 		PodLister:        f.PodLister,
 		ServiceLister:    f.ServiceLister,
 		ControllerLister: f.ControllerLister,
@@ -297,17 +377,12 @@ func (f *ConfigFactory) CreateFromKeys(predicateKeys, priorityKeys sets.String, 
 		NodeInfo:   &predicates.CachedNodeInfo{StoreToNodeLister: f.NodeLister},
 		PVInfo:     f.PVLister,
 		PVCInfo:    f.PVCLister,
-	}
-	predicateFuncs, err := getFitPredicateFunctions(predicateKeys, pluginArgs)
-	if err != nil {
-		return nil, err
-	}
+		HardPodAffinitySymmetricWeight: f.HardPodAffinitySymmetricWeight,
+		FailureDomains:                 sets.NewString(failureDomainArgs...).List(),
+	}, nil
+}
 
-	priorityConfigs, err := getPriorityFunctionConfigs(priorityKeys, pluginArgs)
-	if err != nil {
-		return nil, err
-	}
-
+func (f *ConfigFactory) Run() {
 	// Watch and queue pods that need scheduling.
 	cache.NewReflector(f.createUnassignedNonTerminatedPodLW(), &api.Pod{}, f.PodQueue, 0).RunUntil(f.StopEverything)
 
@@ -330,42 +405,17 @@ func (f *ConfigFactory) CreateFromKeys(predicateKeys, priorityKeys sets.String, 
 	// Watch and cache all ReplicationController objects. Scheduler needs to find all pods
 	// created by the same services or ReplicationControllers/ReplicaSets, so that it can spread them correctly.
 	// Cache this locally.
-	cache.NewReflector(f.createControllerLW(), &api.ReplicationController{}, f.ControllerLister.Store, 0).RunUntil(f.StopEverything)
+	cache.NewReflector(f.createControllerLW(), &api.ReplicationController{}, f.ControllerLister.Indexer, 0).RunUntil(f.StopEverything)
 
 	// Watch and cache all ReplicaSet objects. Scheduler needs to find all pods
 	// created by the same services or ReplicationControllers/ReplicaSets, so that it can spread them correctly.
 	// Cache this locally.
 	cache.NewReflector(f.createReplicaSetLW(), &extensions.ReplicaSet{}, f.ReplicaSetLister.Store, 0).RunUntil(f.StopEverything)
-
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	algo := scheduler.NewGenericScheduler(f.schedulerCache, predicateFuncs, priorityConfigs, extenders, r)
-
-	podBackoff := podBackoff{
-		perPodBackoff: map[types.NamespacedName]*backoffEntry{},
-		clock:         realClock{},
-
-		defaultDuration: 1 * time.Second,
-		maxDuration:     60 * time.Second,
-	}
-
-	return &scheduler.Config{
-		SchedulerCache: f.schedulerCache,
-		// The scheduler only needs to consider schedulable nodes.
-		NodeLister: f.NodeLister.NodeCondition(getNodeConditionPredicate()),
-		Algorithm:  algo,
-		Binder:     &binder{f.Client},
-		NextPod: func() *api.Pod {
-			return f.getNextPod()
-		},
-		Error:          f.makeDefaultErrorFunc(&podBackoff, f.PodQueue),
-		StopEverything: f.StopEverything,
-	}, nil
 }
 
 func (f *ConfigFactory) getNextPod() *api.Pod {
 	for {
-		pod := f.PodQueue.Pop().(*api.Pod)
+		pod := cache.Pop(f.PodQueue).(*api.Pod)
 		if f.responsibleForPod(pod) {
 			glog.V(4).Infof("About to try and schedule pod %v", pod.Name)
 			return pod
@@ -384,15 +434,25 @@ func (f *ConfigFactory) responsibleForPod(pod *api.Pod) bool {
 func getNodeConditionPredicate() cache.NodeConditionPredicate {
 	return func(node api.Node) bool {
 		for _, cond := range node.Status.Conditions {
-			// We consider the node for scheduling only when its NodeReady condition status
-			// is ConditionTrue and its NodeOutOfDisk condition status is ConditionFalse.
+			// We consider the node for scheduling only when its:
+			// - NodeReady condition status is ConditionTrue,
+			// - NodeOutOfDisk condition status is ConditionFalse,
+			// - NodeNetworkUnavailable condition status is ConditionFalse.
 			if cond.Type == api.NodeReady && cond.Status != api.ConditionTrue {
 				glog.V(4).Infof("Ignoring node %v with %v condition status %v", node.Name, cond.Type, cond.Status)
 				return false
 			} else if cond.Type == api.NodeOutOfDisk && cond.Status != api.ConditionFalse {
 				glog.V(4).Infof("Ignoring node %v with %v condition status %v", node.Name, cond.Type, cond.Status)
 				return false
+			} else if cond.Type == api.NodeNetworkUnavailable && cond.Status != api.ConditionFalse {
+				glog.V(4).Infof("Ignoring node %v with %v condition status %v", node.Name, cond.Type, cond.Status)
+				return false
 			}
+		}
+		// Ignore nodes that are marked unschedulable
+		if node.Spec.Unschedulable {
+			glog.V(4).Infof("Ignoring node %v since it is unschedulable", node.Name)
+			return false
 		}
 		return true
 	}
@@ -415,9 +475,10 @@ func (factory *ConfigFactory) createAssignedNonTerminatedPodLW() *cache.ListWatc
 
 // createNodeLW returns a cache.ListWatch that gets all changes to nodes.
 func (factory *ConfigFactory) createNodeLW() *cache.ListWatch {
-	// TODO: Filter out nodes that doesn't have NodeReady condition.
-	fields := fields.Set{api.NodeUnschedulableField: "false"}.AsSelector()
-	return cache.NewListWatchFromClient(factory.Client, "nodes", api.NamespaceAll, fields)
+	// all nodes are considered to ensure that the scheduler cache has access to all nodes for lookups
+	// the NodeCondition is used to filter out the nodes that are not ready or unschedulable
+	// the filtered list is used as the super set of nodes to consider for scheduling
+	return cache.NewListWatchFromClient(factory.Client, "nodes", api.NamespaceAll, fields.ParseSelectorOrDie(""))
 }
 
 // createPersistentVolumeLW returns a cache.ListWatch that gets all changes to persistentVolumes.
@@ -512,6 +573,19 @@ func (b *binder) Bind(binding *api.Binding) error {
 	return b.Post().Namespace(api.NamespaceValue(ctx)).Resource("bindings").Body(binding).Do().Error()
 	// TODO: use Pods interface for binding once clusters are upgraded
 	// return b.Pods(binding.Namespace).Bind(binding)
+}
+
+type podConditionUpdater struct {
+	*client.Client
+}
+
+func (p *podConditionUpdater) Update(pod *api.Pod, condition *api.PodCondition) error {
+	glog.V(2).Infof("Updating pod condition for %s/%s to (%s==%s)", pod.Namespace, pod.Name, condition.Type, condition.Status)
+	if api.UpdatePodCondition(&pod.Status, condition) {
+		_, err := p.Pods(pod.Namespace).UpdateStatus(pod)
+		return err
+	}
+	return nil
 }
 
 type clock interface {

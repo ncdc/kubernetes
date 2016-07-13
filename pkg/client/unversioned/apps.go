@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ type AppsClient struct {
 	*restclient.RESTClient
 }
 
-func (c *AppsClient) PetSet(namespace string) PetSetInterface {
+func (c *AppsClient) PetSets(namespace string) PetSetInterface {
 	return newPetSet(c, namespace)
 }
 
@@ -72,11 +72,6 @@ func setAppsDefaults(config *restclient.Config) error {
 	//}
 
 	config.Codec = api.Codecs.LegacyCodec(*config.GroupVersion)
-	if config.QPS == 0 {
-		config.QPS = 5
-	}
-	if config.Burst == 0 {
-		config.Burst = 10
-	}
+	config.NegotiatedSerializer = api.Codecs
 	return nil
 }

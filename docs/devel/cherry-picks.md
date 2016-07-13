@@ -21,7 +21,7 @@ refer to the docs that go with that version.
 <!-- TAG RELEASE_LINK, added by the munger automatically -->
 <strong>
 The latest release of this document can be found
-[here](http://releases.k8s.io/release-1.2/docs/devel/cherry-picks.md).
+[here](http://releases.k8s.io/release-1.3/docs/devel/cherry-picks.md).
 
 Documentation for other releases can be found at
 [releases.k8s.io](http://releases.k8s.io).
@@ -42,17 +42,18 @@ depending on the point in the release cycle.
 
 1. Cherrypicks are [managed with labels and milestones]
 (pull-requests.md#release-notes)
-1. All label/milestone accounting happens on PRs on master. There's nothing to
-do on PRs targeted to the release branches.
-1. When you want a PR to be merged to the release branch, make the following
-label changes to the **master** branch PR:
-  * Remove release-note-label-needed
-  * Add an appropriate release-note-(!label-needed) label
-  * Add an appropriate milestone
-  * Add the `cherrypick-candidate` label
-  * The PR title is the **release note** you want published at release time and
-note that PR titles are mutable and should reflect a release note
-friendly message for any `release-note-*` labeled PRs.
+1. To get a PR merged to the release branch, first ensure the following labels
+   are on the original **master** branch PR:
+  * An appropriate milestone (e.g. v1.3)
+  * The `cherrypick-candidate` label
+1. If `release-note-none` is set on the master PR, the cherrypick PR will need
+   to set the same label to confirm that no release note is needed.
+1. `release-note` labeled PRs generate a release note using the PR title by
+   default OR the release-note block in the PR template if filled in.
+  * See the [PR template](../../.github/PULL_REQUEST_TEMPLATE.md) for more
+    details.
+  * PR titles and body comments are mutable and can be modified at any time
+    prior to the release to reflect a release note friendly message.
 
 ### How do cherrypick-candidates make it to the release branch?
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -180,13 +180,13 @@ func SlaveAttributesToLabels(attrs []*mesos.Attribute) map[string]string {
 			v = strconv.FormatFloat(a.GetScalar().GetValue(), 'G', -1, 64)
 		}
 
-		if !validation.IsQualifiedName(k) {
-			log.V(3).Infof("ignoring invalid node label name %q", k)
+		if errs := validation.IsQualifiedName(k); len(errs) != 0 {
+			log.V(3).Infof("ignoring invalid node label %q: %v", k, errs)
 			continue
 		}
 
-		if !validation.IsValidLabelValue(v) {
-			log.V(3).Infof("ignoring invalid node label %s value: %q", k, v)
+		if errs := validation.IsValidLabelValue(v); len(errs) != 0 {
+			log.V(3).Infof("ignoring invalid node %s=%q: %v", k, v, errs)
 			continue
 		}
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ package endpoint
 
 import (
 	"reflect"
+	"strconv"
 	"time"
 
 	"encoding/json"
@@ -53,6 +54,14 @@ const (
 	// We must avoid syncing service until the pod store has synced. If it hasn't synced, to
 	// avoid a hot loop, we'll wait this long between checks.
 	PodStoreSyncedPollPeriod = 100 * time.Millisecond
+
+	// An annotation on the Service denoting if the endpoints controller should
+	// go ahead and create endpoints for unready pods. This annotation is
+	// currently only used by PetSets, where we need the pet to be DNS
+	// resolvable during initialization. In this situation we create a headless
+	// service just for the PetSet, and clients shouldn't be using this Service
+	// for anything so unready endpoints don't matter.
+	TolerateUnreadyEndpointsAnnotation = "service.alpha.kubernetes.io/tolerate-unready-endpoints"
 )
 
 var (
@@ -60,7 +69,7 @@ var (
 )
 
 // NewEndpointController returns a new *EndpointController.
-func NewEndpointController(podInformer framework.SharedInformer, client *clientset.Clientset) *EndpointController {
+func NewEndpointController(podInformer framework.SharedIndexInformer, client *clientset.Clientset) *EndpointController {
 	if client != nil && client.Core().GetRESTClient().GetRateLimiter() != nil {
 		metrics.RegisterMetricAndTrackRateLimiterUsage("endpoint_controller", client.Core().GetRESTClient().GetRateLimiter())
 	}
@@ -95,7 +104,7 @@ func NewEndpointController(podInformer framework.SharedInformer, client *clients
 		UpdateFunc: e.updatePod,
 		DeleteFunc: e.deletePod,
 	})
-	e.podStore.Store = podInformer.GetStore()
+	e.podStore.Indexer = podInformer.GetIndexer()
 	e.podController = podInformer.GetController()
 	e.podStoreSynced = podInformer.HasSynced
 
@@ -104,7 +113,7 @@ func NewEndpointController(podInformer framework.SharedInformer, client *clients
 
 // NewEndpointControllerFromClient returns a new *EndpointController that runs its own informer.
 func NewEndpointControllerFromClient(client *clientset.Clientset, resyncPeriod controller.ResyncPeriodFunc) *EndpointController {
-	podInformer := informers.CreateSharedPodInformer(client, resyncPeriod())
+	podInformer := informers.CreateSharedPodIndexInformer(client, resyncPeriod())
 	e := NewEndpointController(podInformer, client)
 	e.internalPodInformer = podInformer
 
@@ -123,7 +132,7 @@ type EndpointController struct {
 	// we have a personal informer, we must start it ourselves.   If you start
 	// the controller using NewEndpointController(passing SharedInformer), this
 	// will be null
-	internalPodInformer framework.SharedInformer
+	internalPodInformer framework.SharedIndexInformer
 
 	// Services that need to be updated. A channel is inappropriate here,
 	// because it allows services with lots of pods to be serviced much
@@ -264,6 +273,7 @@ func (e *EndpointController) deletePod(obj interface{}) {
 	podKey, err := keyFunc(obj)
 	if err != nil {
 		glog.Errorf("Couldn't get key for object %+v: %v", obj, err)
+		return
 	}
 	glog.Infof("Pod %q was deleted but we don't have a record of its final state, so it will take up to %v before it will be removed from all endpoint records.", podKey, FullServiceResyncPeriod)
 
@@ -275,6 +285,7 @@ func (e *EndpointController) enqueueService(obj interface{}) {
 	key, err := keyFunc(obj)
 	if err != nil {
 		glog.Errorf("Couldn't get key for object %+v: %v", obj, err)
+		return
 	}
 
 	e.queue.Add(key)
@@ -310,7 +321,7 @@ func (e *EndpointController) syncService(key string) {
 	if !e.podStoreSynced() {
 		// Sleep so we give the pod reflector goroutine a chance to run.
 		time.Sleep(PodStoreSyncedPollPeriod)
-		glog.Infof("Waiting for pods controller to sync, requeuing rc %v", key)
+		glog.Infof("Waiting for pods controller to sync, requeuing service %v", key)
 		e.queue.Add(key)
 		return
 	}
@@ -355,6 +366,16 @@ func (e *EndpointController) syncService(key string) {
 
 	subsets := []api.EndpointSubset{}
 	podHostNames := map[string]endpoints.HostRecord{}
+
+	var tolerateUnreadyEndpoints bool
+	if v, ok := service.Annotations[TolerateUnreadyEndpointsAnnotation]; ok {
+		b, err := strconv.ParseBool(v)
+		if err == nil {
+			tolerateUnreadyEndpoints = b
+		} else {
+			glog.Errorf("Failed to parse annotation %v: %v", TolerateUnreadyEndpointsAnnotation, err)
+		}
+	}
 
 	for i := range pods.Items {
 		pod := &pods.Items[i]
@@ -401,7 +422,7 @@ func (e *EndpointController) syncService(key string) {
 				epa.Hostname = hostname
 			}
 
-			if api.IsPodReady(pod) {
+			if tolerateUnreadyEndpoints || api.IsPodReady(pod) {
 				subsets = append(subsets, api.EndpointSubset{
 					Addresses: []api.EndpointAddress{epa},
 					Ports:     []api.EndpointPort{epp},

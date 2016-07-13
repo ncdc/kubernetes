@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/unversioned/fake"
+	"k8s.io/kubernetes/pkg/util/term"
 )
 
 type fakeRemoteExecutor struct {
@@ -40,7 +41,7 @@ type fakeRemoteExecutor struct {
 	execErr error
 }
 
-func (f *fakeRemoteExecutor) Execute(method string, url *url.URL, config *restclient.Config, stdin io.Reader, stdout, stderr io.Writer, tty bool) error {
+func (f *fakeRemoteExecutor) Execute(method string, url *url.URL, config *restclient.Config, stdin io.Reader, stdout, stderr io.Writer, tty bool, terminalSizeQueue term.TerminalSizeQueue) error {
 	f.method = method
 	f.url = url
 	return f.execErr
@@ -187,7 +188,7 @@ func TestExec(t *testing.T) {
 				switch p, m := req.URL.Path, req.Method; {
 				case p == test.podPath && m == "GET":
 					body := objBody(codec, test.pod)
-					return &http.Response{StatusCode: 200, Body: body}, nil
+					return &http.Response{StatusCode: 200, Header: defaultHeader(), Body: body}, nil
 				default:
 					// Ensures no GET is performed when deleting by name
 					t.Errorf("%s: unexpected request: %s %#v\n%#v", test.name, req.Method, req.URL, req)

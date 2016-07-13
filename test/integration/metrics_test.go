@@ -1,7 +1,7 @@
 // +build integration,!no-etcd,linux
 
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ func scrapeMetrics(s *httptest.Server) ([]*prometheuspb.MetricFamily, error) {
 		if err := proto.UnmarshalText(scanner.Text(), &metric); err != nil {
 			return nil, fmt.Errorf("Failed to unmarshal line of metrics response: %v", err)
 		}
-		glog.Infof("Got metric %q", metric.GetName())
+		glog.V(4).Infof("Got metric %q", metric.GetName())
 		metrics = append(metrics, &metric)
 	}
 	return metrics, nil
@@ -86,7 +86,7 @@ func checkForExpectedMetrics(t *testing.T, metrics []*prometheuspb.MetricFamily,
 }
 
 func TestMasterProcessMetrics(t *testing.T) {
-	_, s := framework.RunAMaster(t)
+	_, s := framework.RunAMaster(nil)
 	defer s.Close()
 
 	metrics, err := scrapeMetrics(s)
@@ -103,7 +103,7 @@ func TestMasterProcessMetrics(t *testing.T) {
 }
 
 func TestApiserverMetrics(t *testing.T) {
-	_, s := framework.RunAMaster(t)
+	_, s := framework.RunAMaster(nil)
 	defer s.Close()
 
 	// Make a request to the apiserver to ensure there's at least one data point

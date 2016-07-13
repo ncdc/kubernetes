@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -58,6 +58,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/httpstream/spdy"
 	"k8s.io/kubernetes/pkg/util/limitwriter"
 	utilruntime "k8s.io/kubernetes/pkg/util/runtime"
+	"k8s.io/kubernetes/pkg/util/term"
 	"k8s.io/kubernetes/pkg/volume"
 )
 
@@ -160,8 +161,8 @@ type HostInterface interface {
 	GetRunningPods() ([]*api.Pod, error)
 	GetPodByName(namespace, name string) (*api.Pod, bool)
 	RunInContainer(name string, uid types.UID, container string, cmd []string) ([]byte, error)
-	ExecInContainer(name string, uid types.UID, container string, cmd []string, in io.Reader, out, err io.WriteCloser, tty bool) error
-	AttachContainer(name string, uid types.UID, container string, in io.Reader, out, err io.WriteCloser, tty bool) error
+	ExecInContainer(name string, uid types.UID, container string, cmd []string, in io.Reader, out, err io.WriteCloser, tty bool, resize <-chan term.Size) error
+	AttachContainer(name string, uid types.UID, container string, in io.Reader, out, err io.WriteCloser, tty bool, resize <-chan term.Size) error
 	GetKubeletContainerLogs(podFullName, containerName string, logOptions *api.PodLogOptions, stdout, stderr io.Writer) error
 	ServeLogs(w http.ResponseWriter, req *http.Request)
 	PortForward(name string, uid types.UID, port uint16, stream io.ReadWriteCloser) error
@@ -171,7 +172,7 @@ type HostInterface interface {
 	GetNode() (*api.Node, error)
 	GetNodeConfig() cm.NodeConfig
 	LatestLoopEntryTime() time.Time
-	DockerImagesFsInfo() (cadvisorapiv2.FsInfo, error)
+	ImagesFsInfo() (cadvisorapiv2.FsInfo, error)
 	RootFsInfo() (cadvisorapiv2.FsInfo, error)
 	ListVolumesForPod(podUID types.UID) (map[string]volume.Volume, bool)
 	PLEGHealthCheck() (bool, error)
@@ -463,6 +464,13 @@ func (s *Server) getContainerLogs(request *restful.Request, response *restful.Re
 	for _, container := range pod.Spec.Containers {
 		if container.Name == containerName {
 			containerExists = true
+		}
+	}
+	if !containerExists {
+		for _, container := range pod.Spec.InitContainers {
+			if container.Name == containerName {
+				containerExists = true
+			}
 		}
 	}
 	if !containerExists {

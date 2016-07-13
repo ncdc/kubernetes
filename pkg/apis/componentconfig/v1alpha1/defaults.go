@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -80,6 +80,9 @@ func SetDefaults_KubeSchedulerConfiguration(obj *KubeSchedulerConfiguration) {
 	if obj.AlgorithmProvider == "" {
 		obj.AlgorithmProvider = "DefaultProvider"
 	}
+	if obj.ContentType == "" {
+		obj.ContentType = "application/vnd.kubernetes.protobuf"
+	}
 	if obj.KubeAPIQPS == 0 {
 		obj.KubeAPIQPS = 50.0
 	}
@@ -88,6 +91,12 @@ func SetDefaults_KubeSchedulerConfiguration(obj *KubeSchedulerConfiguration) {
 	}
 	if obj.SchedulerName == "" {
 		obj.SchedulerName = api.DefaultSchedulerName
+	}
+	if obj.HardPodAffinitySymmetricWeight == 0 {
+		obj.HardPodAffinitySymmetricWeight = api.DefaultHardPodAffinitySymmetricWeight
+	}
+	if obj.FailureDomains == "" {
+		obj.FailureDomains = api.DefaultFailureDomains
 	}
 }
 

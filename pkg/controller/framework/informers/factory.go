@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,9 +27,9 @@ import (
 	"k8s.io/kubernetes/pkg/watch"
 )
 
-// CreateSharedPodInformer returns a SharedInformer that lists and watches all pods
-func CreateSharedPodInformer(client clientset.Interface, resyncPeriod time.Duration) framework.SharedInformer {
-	sharedInformer := framework.NewSharedInformer(
+// CreateSharedPodInformer returns a SharedIndexInformer that lists and watches all pods
+func CreateSharedPodInformer(client clientset.Interface, resyncPeriod time.Duration) framework.SharedIndexInformer {
+	sharedInformer := framework.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
 				return client.Core().Pods(api.NamespaceAll).List(options)
@@ -38,7 +38,83 @@ func CreateSharedPodInformer(client clientset.Interface, resyncPeriod time.Durat
 				return client.Core().Pods(api.NamespaceAll).Watch(options)
 			},
 		},
-		&api.Pod{}, resyncPeriod)
+		&api.Pod{},
+		resyncPeriod,
+		cache.Indexers{},
+	)
 
 	return sharedInformer
+}
+
+// CreateSharedPodIndexInformer returns a SharedIndexInformer that lists and watches all pods
+func CreateSharedPodIndexInformer(client clientset.Interface, resyncPeriod time.Duration) framework.SharedIndexInformer {
+	sharedIndexInformer := framework.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
+				return client.Core().Pods(api.NamespaceAll).List(options)
+			},
+			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
+				return client.Core().Pods(api.NamespaceAll).Watch(options)
+			},
+		},
+		&api.Pod{},
+		resyncPeriod,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+	)
+
+	return sharedIndexInformer
+}
+
+// CreateSharedNodeIndexInformer returns a SharedIndexInformer that lists and watches all nodes
+func CreateSharedNodeIndexInformer(client clientset.Interface, resyncPeriod time.Duration) framework.SharedIndexInformer {
+	sharedIndexInformer := framework.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
+				return client.Core().Nodes().List(options)
+			},
+			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
+				return client.Core().Nodes().Watch(options)
+			},
+		},
+		&api.Node{},
+		resyncPeriod,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+
+	return sharedIndexInformer
+}
+
+// CreateSharedPVCIndexInformer returns a SharedIndexInformer that lists and watches all PVCs
+func CreateSharedPVCIndexInformer(client clientset.Interface, resyncPeriod time.Duration) framework.SharedIndexInformer {
+	sharedIndexInformer := framework.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
+				return client.Core().PersistentVolumeClaims(api.NamespaceAll).List(options)
+			},
+			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
+				return client.Core().PersistentVolumeClaims(api.NamespaceAll).Watch(options)
+			},
+		},
+		&api.PersistentVolumeClaim{},
+		resyncPeriod,
+		cache.Indexers{})
+
+	return sharedIndexInformer
+}
+
+// CreateSharedPVIndexInformer returns a SharedIndexInformer that lists and watches all PVs
+func CreateSharedPVIndexInformer(client clientset.Interface, resyncPeriod time.Duration) framework.SharedIndexInformer {
+	sharedIndexInformer := framework.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
+				return client.Core().PersistentVolumes().List(options)
+			},
+			WatchFunc: func(options api.ListOptions) (watch.Interface, error) {
+				return client.Core().PersistentVolumes().Watch(options)
+			},
+		},
+		&api.PersistentVolume{},
+		resyncPeriod,
+		cache.Indexers{})
+
+	return sharedIndexInformer
 }

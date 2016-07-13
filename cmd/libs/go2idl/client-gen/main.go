@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,19 +26,21 @@ import (
 	"k8s.io/kubernetes/cmd/libs/go2idl/client-gen/generators"
 	"k8s.io/kubernetes/pkg/api/unversioned"
 
+	"strings"
+
 	"github.com/golang/glog"
 	flag "github.com/spf13/pflag"
-	"strings"
 )
 
 var (
-	test          = flag.BoolP("test", "t", false, "set this flag to generate the client code for the testdata")
-	inputVersions = flag.StringSlice("input", []string{"api/", "extensions/", "batch/"}, "group/versions that client-gen will generate clients for. At most one version per group is allowed. Specified in the format \"group1/version1,group2/version2...\". Default to \"api/,extensions/,batch/\"")
-	basePath      = flag.String("input-base", "k8s.io/kubernetes/pkg/apis", "base path to look for the api group. Default to \"k8s.io/kubernetes/pkg/apis\"")
-	clientsetName = flag.StringP("clientset-name", "n", "internalclientset", "the name of the generated clientset package.")
-	clientsetPath = flag.String("clientset-path", "k8s.io/kubernetes/pkg/client/clientset_generated/", "the generated clientset will be output to <clientset-path>/<clientset-name>. Default to \"k8s.io/kubernetes/pkg/client/clientset_generated/\"")
-	clientsetOnly = flag.Bool("clientset-only", false, "when set, client-gen only generates the clientset shell, without generating the individual typed clients")
-	fakeClient    = flag.Bool("fake-clientset", true, "when set, client-gen will generate the fake clientset that can be used in tests")
+	test                   = flag.BoolP("test", "t", false, "set this flag to generate the client code for the testdata")
+	inputVersions          = flag.StringSlice("input", []string{"api/", "extensions/", "autoscaling/", "batch/", "rbac/", "certificates/"}, "group/versions that client-gen will generate clients for. At most one version per group is allowed. Specified in the format \"group1/version1,group2/version2...\". Default to \"api/,extensions/,autoscaling/,batch/,rbac/\"")
+	includedTypesOverrides = flag.StringSlice("included-types-overrides", []string{}, "list of group/version/type for which client should be generated. By default, client is generated for all types which have genclient=true in types.go. This overrides that. For each groupVersion in this list, only the types mentioned here will be included. The default check of genclient=true will be used for other group versions.")
+	basePath               = flag.String("input-base", "k8s.io/kubernetes/pkg/apis", "base path to look for the api group. Default to \"k8s.io/kubernetes/pkg/apis\"")
+	clientsetName          = flag.StringP("clientset-name", "n", "internalclientset", "the name of the generated clientset package.")
+	clientsetPath          = flag.String("clientset-path", "k8s.io/kubernetes/pkg/client/clientset_generated/", "the generated clientset will be output to <clientset-path>/<clientset-name>. Default to \"k8s.io/kubernetes/pkg/client/clientset_generated/\"")
+	clientsetOnly          = flag.Bool("clientset-only", false, "when set, client-gen only generates the clientset shell, without generating the individual typed clients")
+	fakeClient             = flag.Bool("fake-clientset", true, "when set, client-gen will generate the fake clientset that can be used in tests")
 )
 
 func versionToPath(gvPath string, group string, version string) (path string) {
@@ -49,6 +51,24 @@ func versionToPath(gvPath string, group string, version string) (path string) {
 		path = filepath.Join(*basePath, gvPath, group, version)
 	}
 	return
+}
+
+func parseGroupVersionType(gvtString string) (gvString string, typeStr string, err error) {
+	invalidFormatErr := fmt.Errorf("invalid value: %s, should be of the form group/version/type", gvtString)
+	subs := strings.Split(gvtString, "/")
+	length := len(subs)
+	switch length {
+	case 2:
+		// handle legacy api group version.
+		if subs[0] == "api" {
+			return "api/", subs[1], nil
+		}
+		return "", "", invalidFormatErr
+	case 3:
+		return strings.Join(subs[:length-1], "/"), subs[length-1], nil
+	default:
+		return "", "", invalidFormatErr
+	}
 }
 
 func parsePathGroupVersion(pgvString string) (gvPath string, gvString string) {
@@ -84,6 +104,27 @@ func parseInputVersions() (paths []string, groupVersions []unversioned.GroupVers
 	return paths, groupVersions, gvToPath, nil
 }
 
+func parseIncludedTypesOverrides() (map[unversioned.GroupVersion][]string, error) {
+	overrides := make(map[unversioned.GroupVersion][]string)
+	for _, input := range *includedTypesOverrides {
+		gvString, typeStr, err := parseGroupVersionType(input)
+		if err != nil {
+			return nil, err
+		}
+		gv, err := unversioned.ParseGroupVersion(gvString)
+		if err != nil {
+			return nil, err
+		}
+		types, ok := overrides[gv]
+		if !ok {
+			types = []string{}
+		}
+		types = append(types, typeStr)
+		overrides[gv] = types
+	}
+	return overrides, nil
+}
+
 func main() {
 	arguments := args.Default()
 	flag.Parse()
@@ -105,12 +146,12 @@ func main() {
 
 	if *test {
 		arguments.InputDirs = append(dependencies, []string{
-			"k8s.io/kubernetes/cmd/libs/go2idl/client-gen/testdata/apis/testgroup.k8s.io",
+			"k8s.io/kubernetes/cmd/libs/go2idl/client-gen/test_apis/testgroup.k8s.io",
 		}...)
 		arguments.CustomArgs = clientgenargs.Args{
 			GroupVersions: []unversioned.GroupVersion{{Group: "testgroup.k8s.io", Version: ""}},
 			GroupVersionToInputPath: map[unversioned.GroupVersion]string{
-				unversioned.GroupVersion{Group: "testgroup.k8s.io", Version: ""}: "k8s.io/kubernetes/cmd/libs/go2idl/client-gen/testdata/apis/testgroup.k8s.io",
+				unversioned.GroupVersion{Group: "testgroup.k8s.io", Version: ""}: "k8s.io/kubernetes/cmd/libs/go2idl/client-gen/test_apis/testgroup.k8s.io",
 			},
 			ClientsetName:       "test_internalclientset",
 			ClientsetOutputPath: "k8s.io/kubernetes/cmd/libs/go2idl/client-gen/testoutput/clientset_generated/",
@@ -123,6 +164,10 @@ func main() {
 		if err != nil {
 			glog.Fatalf("Error: %v", err)
 		}
+		includedTypesOverrides, err := parseIncludedTypesOverrides()
+		if err != nil {
+			glog.Fatalf("Unexpected error: %v", err)
+		}
 		glog.Infof("going to generate clientset from these input paths: %v", inputPath)
 		arguments.InputDirs = append(inputPath, dependencies...)
 
@@ -134,6 +179,7 @@ func main() {
 			ClientsetOnly:           *clientsetOnly,
 			FakeClient:              *fakeClient,
 			CmdArgs:                 cmdArgs,
+			IncludedTypesOverrides:  includedTypesOverrides,
 		}
 
 		fmt.Printf("==arguments: %v\n", arguments)

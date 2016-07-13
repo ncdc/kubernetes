@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors All rights reserved.
+Copyright 2016 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ limitations under the License.
 package unversioned
 
 import (
-	testgroup_k8s_io "k8s.io/kubernetes/cmd/libs/go2idl/client-gen/testdata/apis/testgroup.k8s.io"
+	testgroup_k8s_io "k8s.io/kubernetes/cmd/libs/go2idl/client-gen/test_apis/testgroup.k8s.io"
 	api "k8s.io/kubernetes/pkg/api"
 	watch "k8s.io/kubernetes/pkg/watch"
 )
@@ -38,6 +38,7 @@ type TestTypeInterface interface {
 	Get(name string) (*testgroup_k8s_io.TestType, error)
 	List(opts api.ListOptions) (*testgroup_k8s_io.TestTypeList, error)
 	Watch(opts api.ListOptions) (watch.Interface, error)
+	Patch(name string, pt api.PatchType, data []byte) (result *testgroup_k8s_io.TestType, err error)
 	TestTypeExpansion
 }
 
@@ -147,4 +148,17 @@ func (c *testTypes) Watch(opts api.ListOptions) (watch.Interface, error) {
 		Resource("testtypes").
 		VersionedParams(&opts, api.ParameterCodec).
 		Watch()
+}
+
+// Patch applies the patch and returns the patched testType.
+func (c *testTypes) Patch(name string, pt api.PatchType, data []byte) (result *testgroup_k8s_io.TestType, err error) {
+	result = &testgroup_k8s_io.TestType{}
+	err = c.client.Patch(pt).
+		Namespace(c.ns).
+		Resource("testtypes").
+		Name(name).
+		Body(data).
+		Do().
+		Into(result)
+	return
 }

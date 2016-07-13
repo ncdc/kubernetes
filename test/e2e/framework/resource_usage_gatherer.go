@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
 	utilruntime "k8s.io/kubernetes/pkg/util/runtime"
+	"k8s.io/kubernetes/pkg/util/system"
 )
 
 const (
@@ -197,13 +198,16 @@ func getKubemarkMasterComponentsResourceUsage() ResourceUsagePerContainer {
 		if name != "" {
 			// Gatherer expects pod_name/container_name format
 			fullName := name + "/" + name
-			result[fullName] = &ContainerResourceUsage{Name: fullName, MemoryWorkingSetInBytes: mem, CPUUsageInCores: cpu}
+			result[fullName] = &ContainerResourceUsage{Name: fullName, MemoryWorkingSetInBytes: mem * 1024, CPUUsageInCores: cpu / 100}
 		}
 	}
 	return result
 }
 
 func (g *containerResourceGatherer) getKubeSystemContainersResourceUsage(c *client.Client) {
+	if len(g.workers) == 0 {
+		return
+	}
 	delayPeriod := resourceDataGatheringPeriod / time.Duration(len(g.workers))
 	delay := time.Duration(0)
 	for i := range g.workers {
@@ -225,6 +229,7 @@ type containerResourceGatherer struct {
 
 type ResourceGathererOptions struct {
 	inKubemark bool
+	masterOnly bool
 }
 
 func NewResourceUsageGatherer(c *client.Client, options ResourceGathererOptions) (*containerResourceGatherer, error) {
@@ -263,18 +268,23 @@ func NewResourceUsageGatherer(c *client.Client, options ResourceGathererOptions)
 			return nil, err
 		}
 
-		g.workerWg.Add(len(nodeList.Items))
 		for _, node := range nodeList.Items {
-			g.workers = append(g.workers, resourceGatherWorker{
-				c:                    c,
-				nodeName:             node.Name,
-				wg:                   &g.workerWg,
-				containerIDToNameMap: g.containerIDToNameMap,
-				containerIDs:         g.containerIDs,
-				stopCh:               g.stopCh,
-				finished:             false,
-				inKubemark:           false,
-			})
+			if !options.masterOnly || system.IsMasterNode(&node) {
+				g.workerWg.Add(1)
+				g.workers = append(g.workers, resourceGatherWorker{
+					c:                    c,
+					nodeName:             node.Name,
+					wg:                   &g.workerWg,
+					containerIDToNameMap: g.containerIDToNameMap,
+					containerIDs:         g.containerIDs,
+					stopCh:               g.stopCh,
+					finished:             false,
+					inKubemark:           false,
+				})
+				if options.masterOnly {
+					break
+				}
+			}
 		}
 	}
 	return &g, nil

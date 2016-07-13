@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ import (
 
 // HandlerRunner runs a lifecycle handler for a container.
 type HandlerRunner interface {
-	Run(containerID ContainerID, pod *api.Pod, container *api.Container, handler *api.Handler) error
+	Run(containerID ContainerID, pod *api.Pod, container *api.Container, handler *api.Handler) (string, error)
 }
 
 // RuntimeHelper wraps kubelet to make container runtime
@@ -91,12 +91,11 @@ func ConvertPodStatusToRunningPod(podStatus *PodStatus) Pod {
 			continue
 		}
 		container := &Container{
-			ID:      containerStatus.ID,
-			Name:    containerStatus.Name,
-			Image:   containerStatus.Image,
-			Hash:    containerStatus.Hash,
-			Created: containerStatus.CreatedAt.Unix(),
-			State:   containerStatus.State,
+			ID:    containerStatus.ID,
+			Name:  containerStatus.Name,
+			Image: containerStatus.Image,
+			Hash:  containerStatus.Hash,
+			State: containerStatus.State,
 		}
 		runningPod.Containers = append(runningPod.Containers, container)
 	}

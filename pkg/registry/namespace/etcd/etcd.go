@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,9 +22,8 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	apierrors "k8s.io/kubernetes/pkg/api/errors"
 	storageerr "k8s.io/kubernetes/pkg/api/errors/storage"
+	"k8s.io/kubernetes/pkg/api/rest"
 	"k8s.io/kubernetes/pkg/api/unversioned"
-	"k8s.io/kubernetes/pkg/fields"
-	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/registry/cachesize"
 	"k8s.io/kubernetes/pkg/registry/generic"
 	"k8s.io/kubernetes/pkg/registry/generic/registry"
@@ -69,9 +68,7 @@ func NewREST(opts generic.RESTOptions) (*REST, *StatusREST, *FinalizeREST) {
 		ObjectNameFunc: func(obj runtime.Object) (string, error) {
 			return obj.(*api.Namespace).Name, nil
 		},
-		PredicateFunc: func(label labels.Selector, field fields.Selector) generic.Matcher {
-			return namespace.MatchNamespace(label, field)
-		},
+		PredicateFunc:           namespace.MatchNamespace,
 		QualifiedResource:       api.Resource("namespaces"),
 		DeleteCollectionWorkers: opts.DeleteCollectionWorkers,
 
@@ -175,9 +172,14 @@ func (r *StatusREST) New() runtime.Object {
 	return r.store.New()
 }
 
+// Get retrieves the object from the storage. It is required to support Patch.
+func (r *StatusREST) Get(ctx api.Context, name string) (runtime.Object, error) {
+	return r.store.Get(ctx, name)
+}
+
 // Update alters the status subset of an object.
-func (r *StatusREST) Update(ctx api.Context, obj runtime.Object) (runtime.Object, bool, error) {
-	return r.store.Update(ctx, obj)
+func (r *StatusREST) Update(ctx api.Context, name string, objInfo rest.UpdatedObjectInfo) (runtime.Object, bool, error) {
+	return r.store.Update(ctx, name, objInfo)
 }
 
 func (r *FinalizeREST) New() runtime.Object {
@@ -185,6 +187,6 @@ func (r *FinalizeREST) New() runtime.Object {
 }
 
 // Update alters the status finalizers subset of an object.
-func (r *FinalizeREST) Update(ctx api.Context, obj runtime.Object) (runtime.Object, bool, error) {
-	return r.store.Update(ctx, obj)
+func (r *FinalizeREST) Update(ctx api.Context, name string, objInfo rest.UpdatedObjectInfo) (runtime.Object, bool, error) {
+	return r.store.Update(ctx, name, objInfo)
 }

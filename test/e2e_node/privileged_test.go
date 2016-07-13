@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors All rights reserved.
+Copyright 2016 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"k8s.io/kubernetes/pkg/apimachinery/registered"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
+	"k8s.io/kubernetes/test/e2e/framework"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -42,7 +43,6 @@ const (
 	notPrivilegedHttpPort      = 9090
 	notPrivilegedUdpPort       = 9091
 	notPrivilegedContainerName = "not-privileged-container"
-	privilegedContainerImage   = "gcr.io/google_containers/netexec:1.4"
 	privilegedCommand          = "ip link add dummy1 type dummy"
 )
 
@@ -98,7 +98,7 @@ func (config *PrivilegedPodTestConfig) createPrivilegedPodSpec() *api.Pod {
 			Containers: []api.Container{
 				{
 					Name:            privilegedContainerName,
-					Image:           privilegedContainerImage,
+					Image:           ImageRegistry[netExecImage],
 					ImagePullPolicy: api.PullIfNotPresent,
 					SecurityContext: &api.SecurityContext{Privileged: &isPrivileged},
 					Command: []string{
@@ -109,7 +109,7 @@ func (config *PrivilegedPodTestConfig) createPrivilegedPodSpec() *api.Pod {
 				},
 				{
 					Name:            notPrivilegedContainerName,
-					Image:           privilegedContainerImage,
+					Image:           ImageRegistry[netExecImage],
 					ImagePullPolicy: api.PullIfNotPresent,
 					SecurityContext: &api.SecurityContext{Privileged: &notPrivileged},
 					Command: []string{
@@ -168,7 +168,7 @@ func newHostExecPodSpec(ns, name string) *api.Pod {
 			Containers: []api.Container{
 				{
 					Name:            "hostexec",
-					Image:           "gcr.io/google_containers/hostexec:1.2",
+					Image:           ImageRegistry[hostExecImage],
 					ImagePullPolicy: api.PullIfNotPresent,
 				},
 			},
@@ -198,10 +198,6 @@ func waitForPodRunning(c *client.Client, ns string, name string) error {
 	return fmt.Errorf("Time out while waiting for pod %s/%s to become running; current status: %+v", ns, name, pod.Status)
 }
 
-func setNodeNameForPod(pod *api.Pod) {
-	pod.Spec.NodeName = *nodeName
-}
-
 func createPodAndWaitUntilRunning(c *client.Client, pod *api.Pod) *api.Pod {
 	ref := fmt.Sprintf("%v/%v", pod.Namespace, pod.Name)
 	_, err := createPodWithSpec(c, pod)
@@ -216,8 +212,7 @@ func createPodAndWaitUntilRunning(c *client.Client, pod *api.Pod) *api.Pod {
 func createPodWithSpec(c *client.Client, pod *api.Pod) (*api.Pod, error) {
 	// Manually assign pod to node because we don't run the scheduler in node
 	// e2e tests.
-	// TODO: This should also be a shared utility function.
-	setNodeNameForPod(pod)
+	pod.Spec.NodeName = framework.TestContext.NodeName
 	createdPod, err := c.Pods(pod.Namespace).Create(pod)
 	return createdPod, err
 }

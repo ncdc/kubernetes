@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/types"
 	"k8s.io/kubernetes/pkg/util/flowcontrol"
+	"k8s.io/kubernetes/pkg/util/term"
 	"k8s.io/kubernetes/pkg/volume"
 )
 
@@ -69,17 +70,25 @@ type Runtime interface {
 	APIVersion() (Version, error)
 	// Status returns error if the runtime is unhealthy; nil otherwise.
 	Status() error
-	// GetPods returns a list containers group by pods. The boolean parameter
+	// GetPods returns a list of containers grouped by pods. The boolean parameter
 	// specifies whether the runtime returns all containers including those already
 	// exited and dead containers (used for garbage collection).
 	GetPods(all bool) ([]*Pod, error)
 	// GarbageCollect removes dead containers using the specified container gc policy
-	GarbageCollect(gcPolicy ContainerGCPolicy) error
+	// If allSourcesReady is not true, it means that kubelet doesn't have the
+	// complete list of pods from all avialble sources (e.g., apiserver, http,
+	// file). In this case, garbage collector should refrain itself from aggressive
+	// behavior such as removing all containers of unrecognized pods (yet).
+	// TODO: Revisit this method and make it cleaner.
+	GarbageCollect(gcPolicy ContainerGCPolicy, allSourcesReady bool) error
 	// Syncs the running pod into the desired pod.
 	SyncPod(pod *api.Pod, apiPodStatus api.PodStatus, podStatus *PodStatus, pullSecrets []api.Secret, backOff *flowcontrol.Backoff) PodSyncResult
 	// KillPod kills all the containers of a pod. Pod may be nil, running pod must not be.
 	// TODO(random-liu): Return PodSyncResult in KillPod.
-	KillPod(pod *api.Pod, runningPod Pod) error
+	// gracePeriodOverride if specified allows the caller to override the pod default grace period.
+	// only hard kill paths are allowed to specify a gracePeriodOverride in the kubelet in order to not corrupt user data.
+	// it is useful when doing SIGKILL for hard eviction scenarios, or max grace period during soft eviction scenarios.
+	KillPod(pod *api.Pod, runningPod Pod, gracePeriodOverride *int64) error
 	// GetPodStatus retrieves the status of the pod, including the
 	// information of all containers in the pod that are visble in Runtime.
 	GetPodStatus(uid types.UID, name, namespace string) (*PodStatus, error)
@@ -94,6 +103,17 @@ type Runtime interface {
 	RemoveImage(image ImageSpec) error
 	// Returns Image statistics.
 	ImageStats() (*ImageStats, error)
+	// Returns the filesystem path of the pod's network namespace; if the
+	// runtime does not handle namespace creation itself, or cannot return
+	// the network namespace path, it should return an error.
+	// TODO: Change ContainerID to a Pod ID since the namespace is shared
+	// by all containers in the pod.
+	GetNetNS(containerID ContainerID) (string, error)
+	// Returns the container ID that represents the Pod, as passed to network
+	// plugins. For example if the runtime uses an infra container, returns
+	// the infra container's ContainerID.
+	// TODO: Change ContainerID to a Pod ID, see GetNetNS()
+	GetPodContainerID(*Pod) (ContainerID, error)
 	// TODO(vmarmol): Unify pod and containerID args.
 	// GetContainerLogs returns logs of a specific container. By
 	// default, it returns a snapshot of the container log. Set 'follow' to true to
@@ -107,18 +127,15 @@ type Runtime interface {
 }
 
 type ContainerAttacher interface {
-	AttachContainer(id ContainerID, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool) (err error)
+	AttachContainer(id ContainerID, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool, resize <-chan term.Size) (err error)
 }
 
 // CommandRunner encapsulates the command runner interfaces for testability.
 type ContainerCommandRunner interface {
-	// TODO(vmarmol): Merge RunInContainer and ExecInContainer.
-	// Runs the command in the container of the specified pod.
-	RunInContainer(containerID ContainerID, cmd []string) ([]byte, error)
 	// Runs the command in the container of the specified pod using nsenter.
 	// Attaches the processes stdin, stdout, and stderr. Optionally uses a
 	// tty.
-	ExecInContainer(containerID ContainerID, cmd []string, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool) error
+	ExecInContainer(containerID ContainerID, cmd []string, stdin io.Reader, stdout, stderr io.WriteCloser, tty bool, resize <-chan term.Size) error
 	// Forward the specified port from the specified pod to the stream.
 	PortForward(pod *Pod, port uint16, stream io.ReadWriteCloser) error
 }
@@ -217,6 +234,8 @@ const (
 	ContainerStateExited  ContainerState = "exited"
 	// This unknown encompasses all the states that we currently don't care.
 	ContainerStateUnknown ContainerState = "unknown"
+	// Not in use yet.
+	ContainerStateCreated ContainerState = "created"
 )
 
 // Container provides the runtime information for a container, such as ID, hash,
@@ -234,9 +253,6 @@ type Container struct {
 	// Hash of the container, used for comparison. Optional for containers
 	// not managed by kubelet.
 	Hash uint64
-	// The timestamp of the creation time of the container.
-	// TODO(yifan): Consider to move it to api.ContainerStatus.
-	Created int64
 	// State is the state of the container.
 	State ContainerState
 }
@@ -316,6 +332,8 @@ type Image struct {
 	ID string
 	// Other names by which this image is known.
 	RepoTags []string
+	// Digests by which this image is known.
+	RepoDigests []string
 	// The size of the image in bytes.
 	Size int64
 }
@@ -357,6 +375,8 @@ type RunContainerOptions struct {
 	Envs []EnvVar
 	// The mounts for the containers.
 	Mounts []Mount
+	// The host devices mapped into the containers.
+	Devices []string
 	// The port mappings for the containers.
 	PortMappings []PortMapping
 	// If the container has specified the TerminationMessagePath, then

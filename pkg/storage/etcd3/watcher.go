@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors All rights reserved.
+Copyright 2016 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -110,11 +110,14 @@ func (wc *watchChan) run() {
 	select {
 	case err := <-wc.errChan:
 		errResult := parseError(err)
-		wc.cancel()
-		// error result is guaranteed to be received by user before closing ResultChan.
 		if errResult != nil {
-			wc.resultChan <- *errResult
+			// error result is guaranteed to be received by user before closing ResultChan.
+			select {
+			case wc.resultChan <- *errResult:
+			case <-wc.ctx.Done(): // user has given up all results
+			}
 		}
+		wc.cancel()
 	case <-wc.ctx.Done():
 	}
 	// we need to wait until resultChan wouldn't be sent to anymore
@@ -319,7 +322,11 @@ func prepareObjs(ctx context.Context, e *event, client *clientv3.Client, codec r
 		if err != nil {
 			return nil, nil, err
 		}
-		oldObj, err = decodeObj(codec, versioner, getResp.Kvs[0].Value, getResp.Kvs[0].ModRevision)
+		// Note that this sends the *old* object with the etcd revision for the time at
+		// which it gets deleted.
+		// We assume old object is returned only in Deleted event. Users (e.g. cacher) need
+		// to have larger than previous rev to tell the ordering.
+		oldObj, err = decodeObj(codec, versioner, getResp.Kvs[0].Value, e.rev)
 		if err != nil {
 			return nil, nil, err
 		}

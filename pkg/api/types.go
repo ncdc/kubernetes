@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -138,6 +138,18 @@ type ObjectMeta struct {
 	// objects.  Annotation keys have the same formatting restrictions as Label keys. See the
 	// comments on Labels for details.
 	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// List of objects depended by this object. If ALL objects in the list have
+	// been deleted, this object will be garbage collected. If this object is managed by a controller,
+	// then an entry in this list will point to this controller, with the controller field set to true.
+	// There cannot be more than one managing controller.
+	OwnerReferences []OwnerReference `json:"ownerReferences,omitempty"`
+
+	// Must be empty before the object is deleted from the registry. Each entry
+	// is an identifier for the responsible component that will remove the entry
+	// from the list. If the deletionTimestamp of the object is non-nil, entries
+	// in this list can only be removed.
+	Finalizers []string `json:"finalizers,omitempty"`
 }
 
 const (
@@ -219,6 +231,8 @@ type VolumeSource struct {
 	AzureFile *AzureFileVolumeSource `json:"azureFile,omitempty"`
 	// ConfigMap represents a configMap that should populate this volume
 	ConfigMap *ConfigMapVolumeSource `json:"configMap,omitempty"`
+	// VsphereVolume represents a vSphere volume attached and mounted on kubelets host machine
+	VsphereVolume *VsphereVirtualDiskVolumeSource `json:"vsphereVolume,omitempty"`
 }
 
 // Similar to VolumeSource but meant for the administrator who creates PVs.
@@ -257,6 +271,8 @@ type PersistentVolumeSource struct {
 	Flocker *FlockerVolumeSource `json:"flocker,omitempty"`
 	// AzureFile represents an Azure File Service mount on the host and bind mount to the pod.
 	AzureFile *AzureFileVolumeSource `json:"azureFile,omitempty"`
+	// VsphereVolume represents a vSphere volume attached and mounted on kubelets host machine
+	VsphereVolume *VsphereVirtualDiskVolumeSource `json:"vsphereVolume,omitempty"`
 }
 
 type PersistentVolumeClaimVolumeSource struct {
@@ -290,6 +306,8 @@ type PersistentVolumeSpec struct {
 	// ClaimRef is part of a bi-directional binding between PersistentVolume and PersistentVolumeClaim.
 	// ClaimRef is expected to be non-nil when bound.
 	// claim.VolumeName is the authoritative bind between PV and PVC.
+	// When set to non-nil value, PVC.Spec.Selector of the referenced PVC is
+	// ignored, i.e. labels of this PV do not need to match PVC selector.
 	ClaimRef *ObjectReference `json:"claimRef,omitempty"`
 	// Optional: what happens to a persistent volume when released from its claim.
 	PersistentVolumeReclaimPolicy PersistentVolumeReclaimPolicy `json:"persistentVolumeReclaimPolicy,omitempty"`
@@ -350,9 +368,13 @@ type PersistentVolumeClaimList struct {
 type PersistentVolumeClaimSpec struct {
 	// Contains the types of access modes required
 	AccessModes []PersistentVolumeAccessMode `json:"accessModes,omitempty"`
+	// A label query over volumes to consider for binding. This selector is
+	// ignored when VolumeName is set
+	Selector *unversioned.LabelSelector `json:"selector,omitempty"`
 	// Resources represents the minimum resources required
 	Resources ResourceRequirements `json:"resources,omitempty"`
-	// VolumeName is the binding reference to the PersistentVolume backing this claim
+	// VolumeName is the binding reference to the PersistentVolume backing this
+	// claim. When set to non-empty value Selector is not evaluated
 	VolumeName string `json:"volumeName,omitempty"`
 }
 
@@ -401,6 +423,10 @@ const (
 	ClaimPending PersistentVolumeClaimPhase = "Pending"
 	// used for PersistentVolumeClaims that are bound
 	ClaimBound PersistentVolumeClaimPhase = "Bound"
+	// used for PersistentVolumeClaims that lost their underlying
+	// PersistentVolume. The claim was bound to a PersistentVolume and this
+	// volume does not exist any longer and all data on it was lost.
+	ClaimLost PersistentVolumeClaimPhase = "Lost"
 )
 
 // Represents a host path mapped into a pod.
@@ -414,7 +440,7 @@ type HostPathVolumeSource struct {
 type EmptyDirVolumeSource struct {
 	// TODO: Longer term we want to represent the selection of underlying
 	// media more like a scheduling problem - user says what traits they
-	// need, we give them a backing store that satisifies that.  For now
+	// need, we give them a backing store that satisfies that.  For now
 	// this will cover the most common needs.
 	// Optional: what type of storage medium should back this directory.
 	// The default is "" which means to use the node's default medium.
@@ -572,6 +598,14 @@ type GitRepoVolumeSource struct {
 type SecretVolumeSource struct {
 	// Name of the secret in the pod's namespace to use.
 	SecretName string `json:"secretName,omitempty"`
+	// If unspecified, each key-value pair in the Data field of the referenced
+	// Secret will be projected into the volume as a file whose name is the
+	// key and content is the value. If specified, the listed keys will be
+	// projected into the specified paths, and unlisted keys will not be
+	// present. If a key is specified which is not present in the Secret,
+	// the volume setup will error. Paths must be relative and may not contain
+	// the '..' path or start with '..'.
+	Items []KeyToPath `json:"items,omitempty"`
 }
 
 // Represents an NFS mount that lasts the lifetime of a pod.
@@ -615,13 +649,13 @@ type RBDVolumeSource struct {
 	// TODO: how do we prevent errors in the filesystem from compromising the machine
 	FSType string `json:"fsType,omitempty"`
 	// Optional: RadosPool is the rados pool name,default is rbd
-	RBDPool string `json:"pool"`
+	RBDPool string `json:"pool,omitempty"`
 	// Optional: RBDUser is the rados user name, default is admin
-	RadosUser string `json:"user"`
+	RadosUser string `json:"user,omitempty"`
 	// Optional: Keyring is the path to key ring for RBDUser, default is /etc/ceph/keyring
-	Keyring string `json:"keyring"`
-	// Optional: SecretRef is name of the authentication secret for RBDUser, default is empty.
-	SecretRef *LocalObjectReference `json:"secretRef"`
+	Keyring string `json:"keyring,omitempty"`
+	// Optional: SecretRef is name of the authentication secret for RBDUser, default is nil.
+	SecretRef *LocalObjectReference `json:"secretRef,omitempty"`
 	// Optional: Defaults to false (read/write). ReadOnly here will force
 	// the ReadOnly setting in VolumeMounts.
 	ReadOnly bool `json:"readOnly,omitempty"`
@@ -680,7 +714,10 @@ type DownwardAPIVolumeFile struct {
 	// Required: Path is  the relative path name of the file to be created. Must not be absolute or contain the '..' path. Must be utf-8 encoded. The first item of the relative path must not start with '..'
 	Path string `json:"path"`
 	// Required: Selects a field of the pod: only annotations, labels, name and  namespace are supported.
-	FieldRef ObjectFieldSelector `json:"fieldRef"`
+	FieldRef *ObjectFieldSelector `json:"fieldRef,omitempty"`
+	// Selects a resource of the container: only resources limits and requests
+	// (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported.
+	ResourceFieldRef *ResourceFieldSelector `json:"resourceFieldRef,omitempty"`
 }
 
 // AzureFile represents an Azure File Service mount on the host and bind mount to the pod.
@@ -692,6 +729,16 @@ type AzureFileVolumeSource struct {
 	// Defaults to false (read/write). ReadOnly here will force
 	// the ReadOnly setting in VolumeMounts.
 	ReadOnly bool `json:"readOnly,omitempty"`
+}
+
+// Represents a vSphere volume resource.
+type VsphereVirtualDiskVolumeSource struct {
+	// Path that identifies vSphere volume vmdk
+	VolumePath string `json:"volumePath"`
+	// Filesystem type to mount.
+	// Must be a filesystem type supported by the host operating system.
+	// Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
+	FSType string `json:"fsType,omitempty"`
 }
 
 // Adapts a ConfigMap into a volume.
@@ -748,6 +795,9 @@ type VolumeMount struct {
 	ReadOnly bool `json:"readOnly,omitempty"`
 	// Required. Must not contain ':'.
 	MountPath string `json:"mountPath"`
+	// Path within the volume from which the container's volume should be mounted.
+	// Defaults to "" (volume's root).
+	SubPath string `json:"subPath,omitempty"`
 }
 
 // EnvVar represents an environment variable present in a Container.
@@ -772,6 +822,9 @@ type EnvVar struct {
 type EnvVarSource struct {
 	// Selects a field of the pod; only name and namespace are supported.
 	FieldRef *ObjectFieldSelector `json:"fieldRef,omitempty"`
+	// Selects a resource of the container: only resources limits and requests
+	// (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported.
+	ResourceFieldRef *ResourceFieldSelector `json:"resourceFieldRef,omitempty"`
 	// Selects a key of a ConfigMap.
 	ConfigMapKeyRef *ConfigMapKeySelector `json:"configMapKeyRef,omitempty"`
 	// Selects a key of a secret in the pod's namespace.
@@ -786,6 +839,16 @@ type ObjectFieldSelector struct {
 	APIVersion string `json:"apiVersion"`
 	// Required: Path of the field to select in the specified API version
 	FieldPath string `json:"fieldPath"`
+}
+
+// ResourceFieldSelector represents container resources (cpu, memory) and their output format
+type ResourceFieldSelector struct {
+	// Container name: required for volumes, optional for env vars
+	ContainerName string `json:"containerName,omitempty"`
+	// Required: resource to select
+	Resource string `json:"resource"`
+	// Specifies the output format of the exposed resources, defaults to "1"
+	Divisor resource.Quantity `json:"divisor,omitempty"`
 }
 
 // Selects a key from a ConfigMap.
@@ -1058,9 +1121,13 @@ type PodConditionType string
 
 // These are valid conditions of pod.
 const (
+	// PodScheduled represents status of the scheduling process for this pod.
+	PodScheduled PodConditionType = "PodScheduled"
 	// PodReady means the pod is able to service requests and should be added to the
 	// load balancing pools of all matching services.
 	PodReady PodConditionType = "Ready"
+	// PodInitialized means that all init containers in the pod have started successfully.
+	PodInitialized PodConditionType = "Initialized"
 )
 
 type PodCondition struct {
@@ -1149,11 +1216,109 @@ const (
 	NodeSelectorOpLt           NodeSelectorOperator = "Lt"
 )
 
-// Affinity is a group of affinity scheduling rules, currently
-// only node affinity, but in the future also inter-pod affinity.
+// Affinity is a group of affinity scheduling rules.
 type Affinity struct {
 	// Describes node affinity scheduling rules for the pod.
 	NodeAffinity *NodeAffinity `json:"nodeAffinity,omitempty"`
+	// Describes pod affinity scheduling rules (e.g. co-locate this pod in the same node, zone, etc. as some other pod(s)).
+	PodAffinity *PodAffinity `json:"podAffinity,omitempty"`
+	// Describes pod anti-affinity scheduling rules (e.g. avoid putting this pod in the same node, zone, etc. as some other pod(s)).
+	PodAntiAffinity *PodAntiAffinity `json:"podAntiAffinity,omitempty"`
+}
+
+// Pod affinity is a group of inter pod affinity scheduling rules.
+type PodAffinity struct {
+	// NOT YET IMPLEMENTED. TODO: Uncomment field once it is implemented.
+	// If the affinity requirements specified by this field are not met at
+	// scheduling time, the pod will not be scheduled onto the node.
+	// If the affinity requirements specified by this field cease to be met
+	// at some point during pod execution (e.g. due to a pod label update), the
+	// system will try to eventually evict the pod from its node.
+	// When there are multiple elements, the lists of nodes corresponding to each
+	// podAffinityTerm are intersected, i.e. all terms must be satisfied.
+	// RequiredDuringSchedulingRequiredDuringExecution []PodAffinityTerm  `json:"requiredDuringSchedulingRequiredDuringExecution,omitempty"`
+	// If the affinity requirements specified by this field are not met at
+	// scheduling time, the pod will not be scheduled onto the node.
+	// If the affinity requirements specified by this field cease to be met
+	// at some point during pod execution (e.g. due to a pod label update), the
+	// system may or may not try to eventually evict the pod from its node.
+	// When there are multiple elements, the lists of nodes corresponding to each
+	// podAffinityTerm are intersected, i.e. all terms must be satisfied.
+	RequiredDuringSchedulingIgnoredDuringExecution []PodAffinityTerm `json:"requiredDuringSchedulingIgnoredDuringExecution,omitempty"`
+	// The scheduler will prefer to schedule pods to nodes that satisfy
+	// the affinity expressions specified by this field, but it may choose
+	// a node that violates one or more of the expressions. The node that is
+	// most preferred is the one with the greatest sum of weights, i.e.
+	// for each node that meets all of the scheduling requirements (resource
+	// request, requiredDuringScheduling affinity expressions, etc.),
+	// compute a sum by iterating through the elements of this field and adding
+	// "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+	// node(s) with the highest sum are the most preferred.
+	PreferredDuringSchedulingIgnoredDuringExecution []WeightedPodAffinityTerm `json:"preferredDuringSchedulingIgnoredDuringExecution,omitempty"`
+}
+
+// Pod anti affinity is a group of inter pod anti affinity scheduling rules.
+type PodAntiAffinity struct {
+	// NOT YET IMPLEMENTED. TODO: Uncomment field once it is implemented.
+	// If the anti-affinity requirements specified by this field are not met at
+	// scheduling time, the pod will not be scheduled onto the node.
+	// If the anti-affinity requirements specified by this field cease to be met
+	// at some point during pod execution (e.g. due to a pod label update), the
+	// system will try to eventually evict the pod from its node.
+	// When there are multiple elements, the lists of nodes corresponding to each
+	// podAffinityTerm are intersected, i.e. all terms must be satisfied.
+	// RequiredDuringSchedulingRequiredDuringExecution []PodAffinityTerm  `json:"requiredDuringSchedulingRequiredDuringExecution,omitempty"`
+	// If the anti-affinity requirements specified by this field are not met at
+	// scheduling time, the pod will not be scheduled onto the node.
+	// If the anti-affinity requirements specified by this field cease to be met
+	// at some point during pod execution (e.g. due to a pod label update), the
+	// system may or may not try to eventually evict the pod from its node.
+	// When there are multiple elements, the lists of nodes corresponding to each
+	// podAffinityTerm are intersected, i.e. all terms must be satisfied.
+	RequiredDuringSchedulingIgnoredDuringExecution []PodAffinityTerm `json:"requiredDuringSchedulingIgnoredDuringExecution,omitempty"`
+	// The scheduler will prefer to schedule pods to nodes that satisfy
+	// the anti-affinity expressions specified by this field, but it may choose
+	// a node that violates one or more of the expressions. The node that is
+	// most preferred is the one with the greatest sum of weights, i.e.
+	// for each node that meets all of the scheduling requirements (resource
+	// request, requiredDuringScheduling anti-affinity expressions, etc.),
+	// compute a sum by iterating through the elements of this field and adding
+	// "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+	// node(s) with the highest sum are the most preferred.
+	PreferredDuringSchedulingIgnoredDuringExecution []WeightedPodAffinityTerm `json:"preferredDuringSchedulingIgnoredDuringExecution,omitempty"`
+}
+
+// The weights of all of the matched WeightedPodAffinityTerm fields are added per-node to find the most preferred node(s)
+type WeightedPodAffinityTerm struct {
+	// weight associated with matching the corresponding podAffinityTerm,
+	// in the range 1-100.
+	Weight int `json:"weight"`
+	// Required. A pod affinity term, associated with the corresponding weight.
+	PodAffinityTerm PodAffinityTerm `json:"podAffinityTerm"`
+}
+
+// Defines a set of pods (namely those matching the labelSelector
+// relative to the given namespace(s)) that this pod should be
+// co-located (affinity) or not co-located (anti-affinity) with,
+// where co-located is defined as running on a node whose value of
+// the label with key <topologyKey> matches that of any node on which
+// a pod of the set of pods is running.
+type PodAffinityTerm struct {
+	// A label query over a set of resources, in this case pods.
+	LabelSelector *unversioned.LabelSelector `json:"labelSelector,omitempty"`
+	// namespaces specifies which namespaces the labelSelector applies to (matches against);
+	// nil list means "this pod's namespace," empty list means "all namespaces"
+	// The json tag here is not "omitempty" since we need to distinguish nil and empty.
+	// See https://golang.org/pkg/encoding/json/#Marshal for more details.
+	Namespaces []string `json:"namespaces"`
+	// This pod should be co-located (affinity) or not co-located (anti-affinity) with the pods matching
+	// the labelSelector in the specified namespaces, where co-located is defined as running on a node
+	// whose value of the label with key topologyKey matches that of any node on which any of the
+	// selected pods is running.
+	// For PreferredDuringScheduling pod anti-affinity, empty topologyKey is interpreted as "all topologies"
+	// ("all topologies" here means all the topologyKeys indicated by scheduler command-line argument --failure-domains);
+	// for affinity and for RequiredDuringScheduling pod anti-affinity, empty topologyKey is not allowed.
+	TopologyKey string `json:"topologyKey,omitempty"`
 }
 
 // Node affinity is a group of node affinity scheduling rules.
@@ -1193,10 +1358,79 @@ type PreferredSchedulingTerm struct {
 	Preference NodeSelectorTerm `json:"preference"`
 }
 
+// The node this Taint is attached to has the effect "effect" on
+// any pod that that does not tolerate the Taint.
+type Taint struct {
+	// Required. The taint key to be applied to a node.
+	Key string `json:"key" patchStrategy:"merge" patchMergeKey:"key"`
+	// Required. The taint value corresponding to the taint key.
+	Value string `json:"value,omitempty"`
+	// Required. The effect of the taint on pods
+	// that do not tolerate the taint.
+	// Valid effects are NoSchedule and PreferNoSchedule.
+	Effect TaintEffect `json:"effect"`
+}
+
+type TaintEffect string
+
+const (
+	// Do not allow new pods to schedule onto the node unless they tolerate the taint,
+	// but allow all pods submitted to Kubelet without going through the scheduler
+	// to start, and allow all already-running pods to continue running.
+	// Enforced by the scheduler.
+	TaintEffectNoSchedule TaintEffect = "NoSchedule"
+	// Like TaintEffectNoSchedule, but the scheduler tries not to schedule
+	// new pods onto the node, rather than prohibiting new pods from scheduling
+	// onto the node entirely. Enforced by the scheduler.
+	TaintEffectPreferNoSchedule TaintEffect = "PreferNoSchedule"
+	// NOT YET IMPLEMENTED. TODO: Uncomment field once it is implemented.
+	// Do not allow new pods to schedule onto the node unless they tolerate the taint,
+	// do not allow pods to start on Kubelet unless they tolerate the taint,
+	// but allow all already-running pods to continue running.
+	// Enforced by the scheduler and Kubelet.
+	// TaintEffectNoScheduleNoAdmit TaintEffect = "NoScheduleNoAdmit"
+	// NOT YET IMPLEMENTED. TODO: Uncomment field once it is implemented.
+	// Do not allow new pods to schedule onto the node unless they tolerate the taint,
+	// do not allow pods to start on Kubelet unless they tolerate the taint,
+	// and evict any already-running pods that do not tolerate the taint.
+	// Enforced by the scheduler and Kubelet.
+	// TaintEffectNoScheduleNoAdmitNoExecute = "NoScheduleNoAdmitNoExecute"
+)
+
+// The pod this Toleration is attached to tolerates any taint that matches
+// the triple <key,value,effect> using the matching operator <operator>.
+type Toleration struct {
+	// Required. Key is the taint key that the toleration applies to.
+	Key string `json:"key,omitempty" patchStrategy:"merge" patchMergeKey:"key"`
+	// operator represents a key's relationship to the value.
+	// Valid operators are Exists and Equal. Defaults to Equal.
+	// Exists is equivalent to wildcard for value, so that a pod can
+	// tolerate all taints of a particular category.
+	Operator TolerationOperator `json:"operator,omitempty"`
+	// Value is the taint value the toleration matches to.
+	// If the operator is Exists, the value should be empty, otherwise just a regular string.
+	Value string `json:"value,omitempty"`
+	// Effect indicates the taint effect to match. Empty means match all taint effects.
+	// When specified, allowed values are NoSchedule and PreferNoSchedule.
+	Effect TaintEffect `json:"effect,omitempty"`
+	// TODO: For forgiveness (#1574), we'd eventually add at least a grace period
+	// here, and possibly an occurrence threshold and period.
+}
+
+// A toleration operator is the set of operators that can be used in a toleration.
+type TolerationOperator string
+
+const (
+	TolerationOpExists TolerationOperator = "Exists"
+	TolerationOpEqual  TolerationOperator = "Equal"
+)
+
 // PodSpec is a description of a pod
 type PodSpec struct {
 	Volumes []Volume `json:"volumes"`
-	// Required: there must be at least one container in a pod.
+	// List of initialization containers belonging to the pod.
+	InitContainers []Container `json:"-"`
+	// List of containers belonging to the pod.
 	Containers    []Container   `json:"containers"`
 	RestartPolicy RestartPolicy `json:"restartPolicy,omitempty"`
 	// Optional duration in seconds the pod needs to terminate gracefully. May be decreased in delete request.
@@ -1303,6 +1537,11 @@ type PodStatus struct {
 	// This is before the Kubelet pulled the container image(s) for the pod.
 	StartTime *unversioned.Time `json:"startTime,omitempty"`
 
+	// The list has one entry per init container in the manifest. The most recent successful
+	// init container will have ready = true, the most recently started container will have
+	// startTime set.
+	// More info: http://releases.k8s.io/HEAD/docs/user-guide/pod-states.md#container-statuses
+	InitContainerStatuses []ContainerStatus `json:"-"`
 	// The list has one entry per container in the manifest. Each entry is
 	// currently the output of `docker inspect`. This output format is *not*
 	// final and should not be relied upon.
@@ -1520,8 +1759,13 @@ type ServiceSpec struct {
 	// This field will be ignored if the cloud-provider does not support the feature.
 	LoadBalancerIP string `json:"loadBalancerIP,omitempty"`
 
-	// Required: Supports "ClientIP" and "None".  Used to maintain session affinity.
+	// Optional: Supports "ClientIP" and "None".  Used to maintain session affinity.
 	SessionAffinity ServiceAffinity `json:"sessionAffinity,omitempty"`
+
+	// Optional: If specified and supported by the platform, this will restrict traffic through the cloud-provider
+	// load-balancer will be restricted to the specified client IPs. This field will be ignored if the
+	// cloud-provider does not support the feature."
+	LoadBalancerSourceRanges []string `json:"loadBalancerSourceRanges,omitempty"`
 }
 
 type ServicePort struct {
@@ -1719,6 +1963,10 @@ type NodeSystemInfo struct {
 	KubeletVersion string `json:"kubeletVersion"`
 	// KubeProxy Version reported by the node.
 	KubeProxyVersion string `json:"kubeProxyVersion"`
+	// The Operating System reported by the node
+	OperatingSystem string `json:"operatingSystem"`
+	// The Architecture reported by the node
+	Architecture string `json:"architecture"`
 }
 
 // NodeStatus is information about the current status of a node.
@@ -1739,6 +1987,21 @@ type NodeStatus struct {
 	NodeInfo NodeSystemInfo `json:"nodeInfo,omitempty"`
 	// List of container images on this node
 	Images []ContainerImage `json:"images,omitempty"`
+	// List of attachable volumes in use (mounted) by the node.
+	VolumesInUse []UniqueVolumeName `json:"volumesInUse,omitempty"`
+	// List of volumes that are attached to the node.
+	VolumesAttached []AttachedVolume `json:"volumesAttached,omitempty"`
+}
+
+type UniqueVolumeName string
+
+// AttachedVolume describes a volume attached to a node
+type AttachedVolume struct {
+	// Name of the attached volume
+	Name UniqueVolumeName `json:"name"`
+
+	// DevicePath represents the device path where the volume should be available
+	DevicePath string `json:"devicePath"`
 }
 
 // Describe a container image
@@ -1772,6 +2035,10 @@ const (
 	// NodeOutOfDisk means the kubelet will not accept new pods due to insufficient free disk
 	// space on the node.
 	NodeOutOfDisk NodeConditionType = "OutOfDisk"
+	// NodeMemoryPressure means the kubelet is under pressure due to insufficient available memory.
+	NodeMemoryPressure NodeConditionType = "MemoryPressure"
+	// NodeNetworkUnavailable means that network for the node is not correctly configured.
+	NodeNetworkUnavailable NodeConditionType = "NetworkUnavailable"
 )
 
 type NodeCondition struct {
@@ -1809,6 +2076,11 @@ type NodeResources struct {
 // ResourceName is the name identifying various resources in a ResourceList.
 type ResourceName string
 
+// Resource names must be not more than 63 characters, consisting of upper- or lower-case alphanumeric characters,
+// with the -, _, and . characters allowed anywhere, except the first or last character.
+// The default convention, matching that for annotations, is to use lower-case names, with dashes, rather than
+// camel case, separating compound words.
+// Fully-qualified resource typenames are constructed from a DNS-style subdomain, followed by a slash `/` and a name.
 const (
 	// CPU, in cores. (500m = .5 cores)
 	ResourceCPU ResourceName = "cpu"
@@ -1816,6 +2088,8 @@ const (
 	ResourceMemory ResourceName = "memory"
 	// Volume size, in bytes (e,g. 5Gi = 5GiB = 5 * 1024 * 1024 * 1024)
 	ResourceStorage ResourceName = "storage"
+	// NVIDIA GPU, in devices. Alpha, might change: although fractional and allowing values >1, only one whole device per node is assigned.
+	ResourceNvidiaGPU ResourceName = "alpha.kubernetes.io/nvidia-gpu"
 	// Number of Pods that may be running on this Node: see ResourcePods
 )
 
@@ -1856,6 +2130,7 @@ type FinalizerName string
 // These are internal finalizer values to Kubernetes, must be qualified name unless defined here
 const (
 	FinalizerKubernetes FinalizerName = "kubernetes"
+	FinalizerOrphan     string        = "orphan"
 )
 
 // NamespaceStatus is information about the current status of a Namespace.
@@ -1925,6 +2200,10 @@ type DeleteOptions struct {
 	// Must be fulfilled before a deletion is carried out. If not possible, a 409 Conflict status will be
 	// returned.
 	Preconditions *Preconditions `json:"preconditions,omitempty"`
+
+	// Should the dependent objects be orphaned. If true/false, the "orphan"
+	// finalizer will be added to/removed from the object's finalizers list.
+	OrphanDependents *bool `json:"orphanDependents,omitempty"`
 }
 
 // ExportOptions is the query options to the standard REST get call.
@@ -2055,6 +2334,25 @@ type ServiceProxyOptions struct {
 	// http://localhost/api/v1/namespaces/kube-system/services/elasticsearch-logging/_search?q=user:kimchy.
 	// Path is _search?q=user:kimchy.
 	Path string
+}
+
+// OwnerReference contains enough information to let you identify an owning
+// object. Currently, an owning object must be in the same namespace, so there
+// is no namespace field.
+type OwnerReference struct {
+	// API version of the referent.
+	APIVersion string `json:"apiVersion"`
+	// Kind of the referent.
+	// More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#types-kinds
+	Kind string `json:"kind"`
+	// Name of the referent.
+	// More info: http://releases.k8s.io/HEAD/docs/user-guide/identifiers.md#names
+	Name string `json:"name"`
+	// UID of the referent.
+	// More info: http://releases.k8s.io/HEAD/docs/user-guide/identifiers.md#uids
+	UID types.UID `json:"uid"`
+	// If true, this reference points to the managing controller.
+	Controller *bool `json:"controller,omitempty"`
 }
 
 // ObjectReference contains enough information to let you inspect or modify the referred object.
@@ -2388,7 +2686,7 @@ const (
 	// TODO: Consider supporting different formats, specifying CA/destinationCA.
 	SecretTypeTLS SecretType = "kubernetes.io/tls"
 
-	// TLSCertKey is the key for tls certificates in a TLS secert.
+	// TLSCertKey is the key for tls certificates in a TLS secret.
 	TLSCertKey = "tls.crt"
 	// TLSPrivateKeyKey is the key for the private key field in a TLS secret.
 	TLSPrivateKeyKey = "tls.key"
@@ -2453,6 +2751,8 @@ const (
 	StreamTypeData = "data"
 	// Value for streamType header for error stream
 	StreamTypeError = "error"
+	// Value for streamType header for terminal resize stream
+	StreamTypeResize = "resize"
 
 	// Name of header that specifies the port being forwarded
 	PortHeader = "port"
@@ -2573,4 +2873,14 @@ type RangeAllocation struct {
 const (
 	// "default-scheduler" is the name of default scheduler.
 	DefaultSchedulerName = "default-scheduler"
+
+	// RequiredDuringScheduling affinity is not symmetric, but there is an implicit PreferredDuringScheduling affinity rule
+	// corresponding to every RequiredDuringScheduling affinity rule.
+	// When the --hard-pod-affinity-weight scheduler flag is not specified,
+	// DefaultHardPodAffinityWeight defines the weight of the implicit PreferredDuringScheduling affinity rule.
+	DefaultHardPodAffinitySymmetricWeight int = 1
+
+	// When the --failure-domains scheduler flag is not specified,
+	// DefaultFailureDomains defines the set of label keys used when TopologyKey is empty in PreferredDuringScheduling anti-affinity.
+	DefaultFailureDomains string = unversioned.LabelHostname + "," + unversioned.LabelZoneFailureDomain + "," + unversioned.LabelZoneRegion
 )

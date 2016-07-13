@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,6 +45,10 @@ var _ = framework.KubeDescribe("EmptyDir volumes", func() {
 
 		It("new files should be created with FSGroup ownership when container is non-root", func() {
 			doTestSetgidFSGroup(f, testImageNonRootUid, api.StorageMediumMemory)
+		})
+
+		It("files with FSGroup ownership should support (root,0644,tmpfs)", func() {
+			doTest0644FSGroup(f, testImageRootUid, api.StorageMediumMemory)
 		})
 
 		It("volume on default medium should have the correct mode using FSGroup", func() {

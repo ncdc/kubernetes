@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,7 +20,10 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
+	"io/ioutil"
+	"strings"
 	"unicode"
 
 	"github.com/ghodss/yaml"
@@ -203,7 +206,20 @@ func (d *YAMLOrJSONDecoder) Decode(into interface{}) error {
 			d.decoder = NewYAMLToJSONDecoder(buffer)
 		}
 	}
-	return d.decoder.Decode(into)
+	err := d.decoder.Decode(into)
+	if jsonDecoder, ok := d.decoder.(*json.Decoder); ok {
+		if syntax, ok := err.(*json.SyntaxError); ok {
+			data, readErr := ioutil.ReadAll(jsonDecoder.Buffered())
+			if readErr != nil {
+				glog.V(4).Infof("reading stream failed: %v", readErr)
+			}
+			js := string(data)
+			start := strings.LastIndex(js[:syntax.Offset], "\n") + 1
+			line := strings.Count(js[:start], "\n")
+			return fmt.Errorf("json: line %d: %s", line, syntax.Error())
+		}
+	}
+	return err
 }
 
 // GuessJSONStream scans the provided reader up to size, looking

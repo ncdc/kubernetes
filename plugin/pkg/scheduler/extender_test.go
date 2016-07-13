@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package scheduler
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 
 	"k8s.io/kubernetes/pkg/api"
@@ -281,12 +280,11 @@ func TestGenericSchedulerWithExtenders(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		random := rand.New(rand.NewSource(0))
 		extenders := []algorithm.SchedulerExtender{}
 		for ii := range test.extenders {
 			extenders = append(extenders, &test.extenders[ii])
 		}
-		scheduler := NewGenericScheduler(schedulertesting.PodsToCache(test.pods), test.predicates, test.prioritizers, extenders, random)
+		scheduler := NewGenericScheduler(schedulertesting.PodsToCache(test.pods), test.predicates, test.prioritizers, extenders)
 		machine, err := scheduler.Schedule(test.pod, algorithm.FakeNodeLister(makeNodeList(test.nodes)))
 		if test.expectsErr {
 			if err == nil {

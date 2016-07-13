@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -44,12 +44,13 @@ type SharedInformer interface {
 	GetController() ControllerInterface
 	Run(stopCh <-chan struct{})
 	HasSynced() bool
+	LastSyncResourceVersion() string
 }
 
 type SharedIndexInformer interface {
 	SharedInformer
-
-	AddIndexer(indexer cache.Indexer) error
+	// AddIndexers add indexers to the informer before it starts.
+	AddIndexers(indexers cache.Indexers) error
 	GetIndexer() cache.Indexer
 }
 
@@ -57,35 +58,40 @@ type SharedIndexInformer interface {
 // TODO: create a cache/factory of these at a higher level for the list all, watch all of a given resource that can
 // be shared amongst all consumers.
 func NewSharedInformer(lw cache.ListerWatcher, objType runtime.Object, resyncPeriod time.Duration) SharedInformer {
-	sharedInformer := &sharedInformer{
-		processor: &sharedProcessor{},
-		store:     cache.NewStore(DeletionHandlingMetaNamespaceKeyFunc),
-	}
-
-	fifo := cache.NewDeltaFIFO(cache.MetaNamespaceKeyFunc, nil, sharedInformer.store)
-
-	cfg := &Config{
-		Queue:            fifo,
-		ListerWatcher:    lw,
-		ObjectType:       objType,
-		FullResyncPeriod: resyncPeriod,
-		RetryOnError:     false,
-
-		Process: sharedInformer.HandleDeltas,
-	}
-	sharedInformer.controller = New(cfg)
-
-	return sharedInformer
+	return NewSharedIndexInformer(lw, objType, resyncPeriod, cache.Indexers{})
 }
 
-type sharedInformer struct {
-	store      cache.Store
+// NewSharedIndexInformer creates a new instance for the listwatcher.
+// TODO: create a cache/factory of these at a higher level for the list all, watch all of a given resource that can
+// be shared amongst all consumers.
+func NewSharedIndexInformer(lw cache.ListerWatcher, objType runtime.Object, resyncPeriod time.Duration, indexers cache.Indexers) SharedIndexInformer {
+	sharedIndexInformer := &sharedIndexInformer{
+		processor:        &sharedProcessor{},
+		indexer:          cache.NewIndexer(DeletionHandlingMetaNamespaceKeyFunc, indexers),
+		listerWatcher:    lw,
+		objectType:       objType,
+		fullResyncPeriod: resyncPeriod,
+	}
+	return sharedIndexInformer
+}
+
+type sharedIndexInformer struct {
+	indexer    cache.Indexer
 	controller *Controller
 
 	processor *sharedProcessor
 
+	// This block is tracked to handle late initialization of the controller
+	listerWatcher    cache.ListerWatcher
+	objectType       runtime.Object
+	fullResyncPeriod time.Duration
+
 	started     bool
 	startedLock sync.Mutex
+
+	// blockDeltas gives a way to stop all event distribution so that a late event handler
+	// can safely join the shared informer.
+	blockDeltas sync.Mutex
 }
 
 // dummyController hides the fact that a SharedInformer is different from a dedicated one
@@ -94,7 +100,7 @@ type sharedInformer struct {
 // Because returning information back is always asynchronous, the legacy callers shouldn't
 // notice any change in behavior.
 type dummyController struct {
-	informer *sharedInformer
+	informer *sharedIndexInformer
 }
 
 func (v *dummyController) Run(stopCh <-chan struct{}) {
@@ -117,12 +123,26 @@ type deleteNotification struct {
 	oldObj interface{}
 }
 
-func (s *sharedInformer) Run(stopCh <-chan struct{}) {
+func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
+
+	fifo := cache.NewDeltaFIFO(cache.MetaNamespaceKeyFunc, nil, s.indexer)
+
+	cfg := &Config{
+		Queue:            fifo,
+		ListerWatcher:    s.listerWatcher,
+		ObjectType:       s.objectType,
+		FullResyncPeriod: s.fullResyncPeriod,
+		RetryOnError:     false,
+
+		Process: s.HandleDeltas,
+	}
 
 	func() {
 		s.startedLock.Lock()
 		defer s.startedLock.Unlock()
+
+		s.controller = New(cfg)
 		s.started = true
 	}()
 
@@ -130,25 +150,41 @@ func (s *sharedInformer) Run(stopCh <-chan struct{}) {
 	s.controller.Run(stopCh)
 }
 
-func (s *sharedInformer) isStarted() bool {
+func (s *sharedIndexInformer) isStarted() bool {
 	s.startedLock.Lock()
 	defer s.startedLock.Unlock()
 	return s.started
 }
 
-func (s *sharedInformer) HasSynced() bool {
+func (s *sharedIndexInformer) HasSynced() bool {
+	s.startedLock.Lock()
+	defer s.startedLock.Unlock()
+
+	if s.controller == nil {
+		return false
+	}
 	return s.controller.HasSynced()
 }
 
-func (s *sharedInformer) GetStore() cache.Store {
-	return s.store
+func (s *sharedIndexInformer) LastSyncResourceVersion() string {
+	s.startedLock.Lock()
+	defer s.startedLock.Unlock()
+
+	if s.controller == nil {
+		return ""
+	}
+	return s.controller.reflector.LastSyncResourceVersion()
 }
 
-func (s *sharedInformer) GetController() ControllerInterface {
-	return &dummyController{informer: s}
+func (s *sharedIndexInformer) GetStore() cache.Store {
+	return s.indexer
 }
 
-func (s *sharedInformer) AddEventHandler(handler ResourceEventHandler) error {
+func (s *sharedIndexInformer) GetIndexer() cache.Indexer {
+	return s.indexer
+}
+
+func (s *sharedIndexInformer) AddIndexers(indexers cache.Indexers) error {
 	s.startedLock.Lock()
 	defer s.startedLock.Unlock()
 
@@ -156,29 +192,63 @@ func (s *sharedInformer) AddEventHandler(handler ResourceEventHandler) error {
 		return fmt.Errorf("informer has already started")
 	}
 
+	return s.indexer.AddIndexers(indexers)
+}
+
+func (s *sharedIndexInformer) GetController() ControllerInterface {
+	return &dummyController{informer: s}
+}
+
+func (s *sharedIndexInformer) AddEventHandler(handler ResourceEventHandler) error {
+	s.startedLock.Lock()
+	defer s.startedLock.Unlock()
+
+	if !s.started {
+		listener := newProcessListener(handler)
+		s.processor.listeners = append(s.processor.listeners, listener)
+		return nil
+	}
+
+	// in order to safely join, we have to
+	// 1. stop sending add/update/delete notifications
+	// 2. do a list against the store
+	// 3. send synthetic "Add" events to the new handler
+	// 4. unblock
+	s.blockDeltas.Lock()
+	defer s.blockDeltas.Unlock()
+
 	listener := newProcessListener(handler)
 	s.processor.listeners = append(s.processor.listeners, listener)
+
+	items := s.indexer.List()
+	for i := range items {
+		listener.add(addNotification{newObj: items[i]})
+	}
+
 	return nil
 }
 
-func (s *sharedInformer) HandleDeltas(obj interface{}) error {
+func (s *sharedIndexInformer) HandleDeltas(obj interface{}) error {
+	s.blockDeltas.Lock()
+	defer s.blockDeltas.Unlock()
+
 	// from oldest to newest
 	for _, d := range obj.(cache.Deltas) {
 		switch d.Type {
 		case cache.Sync, cache.Added, cache.Updated:
-			if old, exists, err := s.store.Get(d.Object); err == nil && exists {
-				if err := s.store.Update(d.Object); err != nil {
+			if old, exists, err := s.indexer.Get(d.Object); err == nil && exists {
+				if err := s.indexer.Update(d.Object); err != nil {
 					return err
 				}
 				s.processor.distribute(updateNotification{oldObj: old, newObj: d.Object})
 			} else {
-				if err := s.store.Add(d.Object); err != nil {
+				if err := s.indexer.Add(d.Object); err != nil {
 					return err
 				}
 				s.processor.distribute(addNotification{newObj: d.Object})
 			}
 		case cache.Deleted:
-			if err := s.store.Delete(d.Object); err != nil {
+			if err := s.indexer.Delete(d.Object); err != nil {
 				return err
 			}
 			s.processor.distribute(deleteNotification{oldObj: d.Object})
@@ -243,21 +313,30 @@ func (p *processorListener) add(notification interface{}) {
 func (p *processorListener) pop(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 
-	p.lock.Lock()
-	defer p.lock.Unlock()
 	for {
-		for len(p.pendingNotifications) == 0 {
-			// check if we're shutdown
-			select {
-			case <-stopCh:
-				return
-			default:
+		blockingGet := func() (interface{}, bool) {
+			p.lock.Lock()
+			defer p.lock.Unlock()
+
+			for len(p.pendingNotifications) == 0 {
+				// check if we're shutdown
+				select {
+				case <-stopCh:
+					return nil, true
+				default:
+				}
+				p.cond.Wait()
 			}
 
-			p.cond.Wait()
+			nt := p.pendingNotifications[0]
+			p.pendingNotifications = p.pendingNotifications[1:]
+			return nt, false
 		}
-		notification := p.pendingNotifications[0]
-		p.pendingNotifications = p.pendingNotifications[1:]
+
+		notification, stopped := blockingGet()
+		if stopped {
+			return
+		}
 
 		select {
 		case <-stopCh:

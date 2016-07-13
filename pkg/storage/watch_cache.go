@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -323,4 +323,9 @@ func (w *watchCache) GetAllEventsSince(resourceVersion uint64) ([]watchCacheEven
 	w.RLock()
 	defer w.RUnlock()
 	return w.GetAllEventsSinceThreadUnsafe(resourceVersion)
+}
+
+func (w *watchCache) Resync() error {
+	// Nothing to do
+	return nil
 }

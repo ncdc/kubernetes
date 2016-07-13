@@ -54,6 +54,7 @@ import java.util.Map;
  *     <li>CASSANDRA_SERVICE defaults to cassandra</li>
  *     <li>POD_NAMESPACE defaults to 'default'</li>
  *     <li>CASSANDRA_SERVICE_NUM_SEEDS defaults to 8 seeds</li>
+ *     <li>K8S_ACCOUNT_TOKEN defaults to the path for the default token</li>
  * </ul>
  */
 public class KubernetesSeedProvider implements SeedProvider {
@@ -65,11 +66,9 @@ public class KubernetesSeedProvider implements SeedProvider {
      */
     private List<InetAddress> defaultSeeds;
 
-
     private TrustManager[] trustAll;
 
     private HostnameVerifier trustAllHosts;
-
 
     /**
      * Create new Seeds
@@ -80,22 +79,21 @@ public class KubernetesSeedProvider implements SeedProvider {
         // Create default seeds
         defaultSeeds = createDefaultSeeds();
 
-	    // TODO: Load the CA cert when it is available on all platforms.
-	    trustAll = new TrustManager[] {
-	        new X509TrustManager() {
-		        public void checkServerTrusted(X509Certificate[] certs, String authType) {}
-		        public void checkClientTrusted(X509Certificate[] certs, String authType) {}
-		        public X509Certificate[] getAcceptedIssuers() { return null; }
-	        }
-	    };
+        // TODO: Load the CA cert when it is available on all platforms.
+        trustAll = new TrustManager[] {
+            new X509TrustManager() {
+                public void checkServerTrusted(X509Certificate[] certs, String authType) {}
+                public void checkClientTrusted(X509Certificate[] certs, String authType) {}
+                public X509Certificate[] getAcceptedIssuers() { return null; }
+            }
+        };
 
-	    trustAllHosts = new HostnameVerifier() {
-		    public boolean verify(String hostname, SSLSession session) {
-		        return true;
-		    }
-	    };
+        trustAllHosts = new HostnameVerifier() {
+            public boolean verify(String hostname, SSLSession session) {
+                return true;
+            }
+        };
     }
-
 
     /**
      * Call kubernetes API to collect a list of seed providers
@@ -110,10 +108,11 @@ public class KubernetesSeedProvider implements SeedProvider {
         String path = String.format("/api/v1/namespaces/%s/endpoints/", podNamespace);
         String seedSizeVar = getEnvOrDefault("CASSANDRA_SERVICE_NUM_SEEDS", "8");
         Integer seedSize = Integer.valueOf(seedSizeVar);
+        String accountToken = getEnvOrDefault("K8S_ACCOUNT_TOKEN", "/var/run/secrets/kubernetes.io/serviceaccount/token");
 
         List<InetAddress> seeds = new ArrayList<InetAddress>();
         try {
-            String token = getServiceAccountToken();
+            String token = getServiceAccountToken(accountToken);
 
             SSLContext ctx = SSLContext.getInstance("SSL");
             ctx.init(null, trustAll, new SecureRandom());
@@ -133,14 +132,10 @@ public class KubernetesSeedProvider implements SeedProvider {
             Endpoints endpoints = mapper.readValue(conn.getInputStream(), Endpoints.class);
 
             if (endpoints != null) {
-
                 // Here is a problem point, endpoints.subsets can be null in first node cases.
-
                 if (endpoints.subsets != null && !endpoints.subsets.isEmpty()){
-
                     for (Subset subset : endpoints.subsets) {
                         if (subset.addresses != null && !subset.addresses.isEmpty()) {
-
                             for (Address address : subset.addresses) {
                                 seeds.add(InetAddress.getByName(address.ip));
 
@@ -151,29 +146,22 @@ public class KubernetesSeedProvider implements SeedProvider {
                             }
                         }
                     }
-
                 }
-
-		        logger.info("Available num endpoints: " + seeds.size());
-
+                logger.info("Available num endpoints: " + seeds.size());
             } else {
-
-		        logger.warn("Endpoints are not available using default seeds in cassandra.yaml");
+                logger.warn("Endpoints are not available using default seeds in cassandra.yaml");
                 return Collections.unmodifiableList(defaultSeeds);
-
-	        }
-        } catch (IOException | NoSuchAlgorithmException | KeyManagementException ex) {
-	        logger.warn("Request to kubernetes apiserver failed, using default seeds in cassandra.yaml", ex);
+            }
+        } catch (Exception ex) {
+            logger.warn("Request to kubernetes apiserver failed, using default seeds in cassandra.yaml", ex);
             return Collections.unmodifiableList(defaultSeeds);
         }
 
         if (seeds.size() == 0) {
-
-	        // If we got nothing, we might be the first instance, in that case
-	        // fall back on the seeds that were passed in cassandra.yaml.
+            // If we got nothing, we might be the first instance, in that case
+            // fall back on the seeds that were passed in cassandra.yaml.
             logger.warn("Seeds are not available using default seeds in cassandra.yaml");
             return Collections.unmodifiableList(defaultSeeds);
-
         }
 
         return Collections.unmodifiableList(seeds);
@@ -187,24 +175,19 @@ public class KubernetesSeedProvider implements SeedProvider {
     protected List<InetAddress> createDefaultSeeds()
     {
         Config conf;
-        try
-        {
+        try {
             conf = loadConfig();
         }
-        catch (Exception e)
-        {
+        catch (Exception e) {
             throw new AssertionError(e);
         }
         String[] hosts = conf.seed_provider.parameters.get("seeds").split(",", -1);
         List<InetAddress> seeds = new ArrayList<InetAddress>();
-        for (String host : hosts)
-        {
-            try
-            {
+        for (String host : hosts) {
+            try {
                 seeds.add(InetAddress.getByName(host.trim()));
             }
-            catch (UnknownHostException ex)
-            {
+            catch (UnknownHostException ex) {
                 // not fatal... DD will bark if there end up being zero seeds.
                 logger.warn("Seed provider couldn't lookup host {}", host);
             }
@@ -241,13 +224,12 @@ public class KubernetesSeedProvider implements SeedProvider {
         return val;
     }
 
-    private static String getServiceAccountToken()  throws IOException {
-        String file = "/var/run/secrets/kubernetes.io/serviceaccount/token";
+    private static String getServiceAccountToken(String file)  {
         try {
             return new String(Files.readAllBytes(Paths.get(file)));
         } catch (IOException e) {
-            logger.warn("unable to load service account token");
-            throw e;
+            logger.warn("unable to load service account token" + file);
+            throw new RuntimeException("Unable to load services account token " + file);
         }
     }
 
@@ -269,6 +251,4 @@ public class KubernetesSeedProvider implements SeedProvider {
     static class Endpoints {
         public List<Subset> subsets;
     }
-
-
 }

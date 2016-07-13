@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -166,6 +166,15 @@ func IsRegistered(group string) bool {
 func IsRegisteredVersion(v unversioned.GroupVersion) bool {
 	_, found := registeredVersions[v]
 	return found
+}
+
+// RegisteredGroupVersions returns all registered group versions.
+func RegisteredGroupVersions() []unversioned.GroupVersion {
+	ret := []unversioned.GroupVersion{}
+	for groupVersion := range registeredVersions {
+		ret = append(ret, groupVersion)
+	}
+	return ret
 }
 
 // IsThirdPartyAPIGroupVersion returns true if the api version is a user-registered group/version.

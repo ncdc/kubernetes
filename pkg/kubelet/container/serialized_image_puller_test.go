@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -108,7 +108,7 @@ func TestSerializedPuller(t *testing.T) {
 		fakeRecorder := &record.FakeRecorder{}
 		puller := NewSerializedImagePuller(fakeRecorder, fakeRuntime, backOff)
 
-		fakeRuntime.ImageList = []Image{{"present_image", nil, 0}}
+		fakeRuntime.ImageList = []Image{{"present_image", nil, nil, 0}}
 		fakeRuntime.Err = c.pullerErr
 		fakeRuntime.InspectErr = c.inspectErr
 

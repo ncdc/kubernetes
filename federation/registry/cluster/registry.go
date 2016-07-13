@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors All rights reserved.
+Copyright 2016 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ func (s *storage) CreateCluster(ctx api.Context, cluster *federation.Cluster) er
 }
 
 func (s *storage) UpdateCluster(ctx api.Context, cluster *federation.Cluster) error {
-	_, _, err := s.Update(ctx, cluster)
+	_, _, err := s.Update(ctx, cluster.Name, rest.DefaultUpdatedObjectInfo(cluster, api.Scheme))
 	return err
 }
 

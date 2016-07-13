@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors All rights reserved.
+Copyright 2016 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -375,6 +375,9 @@ func (s *store) getState(getResp *clientv3.GetResponse, key string, v reflect.Va
 
 func (s *store) updateState(st *objState, userUpdate storage.UpdateFunc) (runtime.Object, uint64, error) {
 	ret, ttlPtr, err := userUpdate(st.obj, *st.meta)
+	if err != nil {
+		return nil, 0, err
+	}
 
 	version, err := s.versioner.ObjectResourceVersion(ret)
 	if err != nil {

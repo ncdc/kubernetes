@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,7 +25,10 @@ import (
 	"k8s.io/kubernetes/pkg/apis/apps"
 	"k8s.io/kubernetes/pkg/apis/autoscaling"
 	"k8s.io/kubernetes/pkg/apis/batch"
+	"k8s.io/kubernetes/pkg/apis/certificates"
 	"k8s.io/kubernetes/pkg/apis/extensions"
+	"k8s.io/kubernetes/pkg/apis/policy"
+	"k8s.io/kubernetes/pkg/apis/rbac"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/typed/discovery"
 	"k8s.io/kubernetes/pkg/util/sets"
@@ -85,6 +88,23 @@ func New(c *restclient.Config) (*Client, error) {
 			return nil, err
 		}
 	}
+	var policyClient *PolicyClient
+	if registered.IsRegistered(policy.GroupName) {
+		policyConfig := *c
+		policyClient, err = NewPolicy(&policyConfig)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var certsClient *CertificatesClient
+	if registered.IsRegistered(certificates.GroupName) {
+		certsConfig := *c
+		certsClient, err = NewCertificates(&certsConfig)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	var appsClient *AppsClient
 	if registered.IsRegistered(apps.GroupName) {
 		appsConfig := *c
@@ -94,7 +114,16 @@ func New(c *restclient.Config) (*Client, error) {
 		}
 	}
 
-	return &Client{RESTClient: client, AutoscalingClient: autoscalingClient, BatchClient: batchClient, ExtensionsClient: extensionsClient, DiscoveryClient: discoveryClient, AppsClient: appsClient}, nil
+	var rbacClient *RbacClient
+	if registered.IsRegistered(rbac.GroupName) {
+		rbacConfig := *c
+		rbacClient, err = NewRbac(&rbacConfig)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &Client{RESTClient: client, AutoscalingClient: autoscalingClient, BatchClient: batchClient, CertificatesClient: certsClient, ExtensionsClient: extensionsClient, DiscoveryClient: discoveryClient, AppsClient: appsClient, PolicyClient: policyClient, RbacClient: rbacClient}, nil
 }
 
 // MatchesServerVersion queries the server to compares the build version
@@ -114,7 +143,7 @@ func MatchesServerVersion(client *Client, c *restclient.Config) error {
 		return fmt.Errorf("couldn't read version from server: %v\n", err)
 	}
 	// GitVersion includes GitCommit and GitTreeState, but best to be safe?
-	if cVer.GitVersion != sVer.GitVersion || cVer.GitCommit != sVer.GitCommit || cVer.GitTreeState != cVer.GitTreeState {
+	if cVer.GitVersion != sVer.GitVersion || cVer.GitCommit != sVer.GitCommit || cVer.GitTreeState != sVer.GitTreeState {
 		return fmt.Errorf("server version (%#v) differs from client version (%#v)!\n", sVer, cVer)
 	}
 
@@ -172,6 +201,11 @@ func NegotiateVersion(client *Client, c *restclient.Config, requestedGV *unversi
 		if !clientVersions.Has(preferredGV.String()) {
 			return nil, fmt.Errorf("client does not support API version %q; client supported API versions: %v", preferredGV, clientVersions)
 
+		}
+		// If the server supports no versions, then we should just use the preferredGV
+		// This can happen because discovery fails due to 403 Forbidden errors
+		if len(serverVersions) == 0 {
+			return preferredGV, nil
 		}
 		if serverVersions.Has(preferredGV.String()) {
 			return preferredGV, nil
@@ -231,6 +265,9 @@ func SetKubernetesDefaults(config *restclient.Config) error {
 	// TODO: Unconditionally set the config.Version, until we fix the config.
 	copyGroupVersion := g.GroupVersion
 	config.GroupVersion = &copyGroupVersion
+	if config.NegotiatedSerializer == nil {
+		config.NegotiatedSerializer = api.Codecs
+	}
 	if config.Codec == nil {
 		config.Codec = api.Codecs.LegacyCodec(*config.GroupVersion)
 	}

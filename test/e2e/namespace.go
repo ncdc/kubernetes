@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ func ensurePodsAreRemovedWhenNamespaceIsDeleted(f *framework.Framework) {
 			Containers: []api.Container{
 				{
 					Name:  "nginx",
-					Image: "gcr.io/google_containers/pause:2.0",
+					Image: framework.GetPauseImageName(f.Client),
 				},
 			},
 		},

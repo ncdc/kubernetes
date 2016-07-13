@@ -1,7 +1,7 @@
 // +build integration,!no-etcd
 
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ limitations under the License.
 package integration
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,11 +38,14 @@ import (
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/master"
 	quotainstall "k8s.io/kubernetes/pkg/quota/install"
-	"k8s.io/kubernetes/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/watch"
 	"k8s.io/kubernetes/plugin/pkg/admission/resourcequota"
 	"k8s.io/kubernetes/test/integration/framework"
 )
+
+func init() {
+	requireEtcd()
+}
 
 // 1.2 code gets:
 // 	quota_test.go:95: Took 4.218619579s to scale up without quota
@@ -50,8 +54,6 @@ import (
 // 	quota_test.go:100: Took 4.196205966s to scale up without quota
 // 	quota_test.go:115: Took 12.021640372s to scale up with quota
 func TestQuota(t *testing.T) {
-	framework.DeleteAllEtcdKeys()
-
 	initializationCh := make(chan struct{})
 	// Set up a master
 	var m *master.Master
@@ -59,13 +61,14 @@ func TestQuota(t *testing.T) {
 		<-initializationCh
 		m.Handler.ServeHTTP(w, req)
 	}))
-	// TODO: Uncomment when fix #19254
-	// defer s.Close()
+	defer s.Close()
+	admissionCh := make(chan struct{})
 	clientset := clientset.NewForConfigOrDie(&restclient.Config{QPS: -1, Host: s.URL, ContentConfig: restclient.ContentConfig{GroupVersion: testapi.Default.GroupVersion()}})
-	admission, err := resourcequota.NewResourceQuota(clientset, quotainstall.NewRegistry(clientset), 5)
+	admission, err := resourcequota.NewResourceQuota(clientset, quotainstall.NewRegistry(clientset), 5, admissionCh)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	defer close(admissionCh)
 
 	masterConfig := framework.NewIntegrationTestMasterConfig()
 	masterConfig.AdmissionControl = admission
@@ -75,16 +78,20 @@ func TestQuota(t *testing.T) {
 	}
 	close(initializationCh)
 
-	go replicationcontroller.NewReplicationManagerFromClient(clientset, controller.NoResyncPeriodFunc, replicationcontroller.BurstReplicas, 4096).
-		Run(3, wait.NeverStop)
+	ns := framework.CreateTestingNamespace("quotaed", s, t)
+	defer framework.DeleteTestingNamespace(ns, s, t)
+	ns2 := framework.CreateTestingNamespace("non-quotaed", s, t)
+	defer framework.DeleteTestingNamespace(ns2, s, t)
+
+	controllerCh := make(chan struct{})
+	defer close(controllerCh)
+
+	go replicationcontroller.NewReplicationManagerFromClientForIntegration(clientset, controller.NoResyncPeriodFunc, replicationcontroller.BurstReplicas, 4096).
+		Run(3, controllerCh)
 
 	resourceQuotaRegistry := quotainstall.NewRegistry(clientset)
 	groupKindsToReplenish := []unversioned.GroupKind{
 		api.Kind("Pod"),
-		api.Kind("Service"),
-		api.Kind("ReplicationController"),
-		api.Kind("PersistentVolumeClaim"),
-		api.Kind("Secret"),
 	}
 	resourceQuotaControllerOptions := &resourcequotacontroller.ResourceQuotaControllerOptions{
 		KubeClient:                clientset,
@@ -94,15 +101,18 @@ func TestQuota(t *testing.T) {
 		ReplenishmentResyncPeriod: controller.NoResyncPeriodFunc,
 		ControllerFactory:         resourcequotacontroller.NewReplenishmentControllerFactoryFromClient(clientset),
 	}
-	go resourcequotacontroller.NewResourceQuotaController(resourceQuotaControllerOptions).Run(2, wait.NeverStop)
+	go resourcequotacontroller.NewResourceQuotaController(resourceQuotaControllerOptions).Run(2, controllerCh)
 
 	startTime := time.Now()
-	scale(t, api.NamespaceDefault, clientset)
+	scale(t, ns2.Name, clientset)
 	endTime := time.Now()
 	t.Logf("Took %v to scale up without quota", endTime.Sub(startTime))
 
 	quota := &api.ResourceQuota{
-		ObjectMeta: api.ObjectMeta{Name: "quota"},
+		ObjectMeta: api.ObjectMeta{
+			Name:      "quota",
+			Namespace: ns.Name,
+		},
 		Spec: api.ResourceQuotaSpec{
 			Hard: api.ResourceList{
 				api.ResourcePods: resource.MustParse("1000"),
@@ -115,15 +125,15 @@ func TestQuota(t *testing.T) {
 	scale(t, "quotaed", clientset)
 	endTime = time.Now()
 	t.Logf("Took %v to scale up with quota", endTime.Sub(startTime))
-
 }
+
 func waitForQuota(t *testing.T, quota *api.ResourceQuota, clientset *clientset.Clientset) {
 	w, err := clientset.Core().ResourceQuotas(quota.Namespace).Watch(api.SingleObject(api.ObjectMeta{Name: quota.Name}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if _, err := clientset.Core().ResourceQuotas("quotaed").Create(quota); err != nil {
+	if _, err := clientset.Core().ResourceQuotas(quota.Namespace).Create(quota); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -149,7 +159,7 @@ func waitForQuota(t *testing.T, quota *api.ResourceQuota, clientset *clientset.C
 }
 
 func scale(t *testing.T, namespace string, clientset *clientset.Clientset) {
-	target := 1000
+	target := 100
 	rc := &api.ReplicationController{
 		ObjectMeta: api.ObjectMeta{
 			Name:      "foo",
@@ -194,6 +204,7 @@ func scale(t *testing.T, namespace string, clientset *clientset.Clientset) {
 
 		switch cast := event.Object.(type) {
 		case *api.ReplicationController:
+			fmt.Printf("Found %v of %v replicas\n", int(cast.Status.Replicas), target)
 			if int(cast.Status.Replicas) == target {
 				return true, nil
 			}
