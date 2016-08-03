@@ -33,27 +33,55 @@ Documentation for other releases can be found at
 
 # Abstract
 
-Kubernetes has Services but they are scoped per namespace, and (assuming eventual support for RBAC)
-you may not want everyone to be able to see and use all the services in your namespace.
+A new catalog concept is proposed for sharing reusable recipes for services,
+the containers that back them, and configuration data associated with them.
+Users will be able to publish recipes to the catalog and browse the catalog
+for recipes to use.
 
-This proposal is divided into multiple phases, as some items are potentially immediately actionable,
-while others are dependent on features that don't yet exist in Kubernetes.
+# Motivation
 
-For Phase 1, this proposal is about:
+Users don’t like reinventing the wheel. Most users would prefer to be able to
+search for and use something like a database template to run their own
+database over doing the work necessary to create a custom solution.  There are
+a number of pieces attendant to such an effort: a Service to provide a stable
+network endpoint for the database, a Deployment to back that endpoint with
+database containers, and possibly a ConfigMap and or Secret to store
+configuration information and credentials about the database.
 
-- associating additional configuration/secret data with Services
-- adding a new Service Catalog resource into which users can publish entries that others can easily
-  find and consume
-- making it easier to link Services (and their associated configuration data) to deployable
-  resources (Deployments, ReplicationControllers, Pods, etc.)
+If you assume that most or all namespaces and the resources in them are
+private, we need a way for users to be able to share resources with others.
+Role-based access control (RBAC) could help, as it allows users to control who
+can access resources in a namespace, but that pertains to existing resources.
+If you want create a pre-canned way of running something like a database and
+share that with others, that’s not RBAC against existing resources; that’s
+something more akin to publishing a “template” to a searchable catalog.
 
-Once Phase 1 has been implemented, Phase 2 will address:
+This document describes a new “Catalog” concept for sharing reusable
+resources.
 
-- adding support for dynamic provisioning of resources from the catalog
+# Use cases
 
-# Phase 1
-
-## Use cases
+1.  Recipes for running software systems in Kubernetes:
+    1.  As someone who created a recipe for running a software system in
+        Kubernetes, I want to share this recipe with others so that they can
+        easily stand up their own copy
+    2.  As someone who wants to run a particular software system in Kubernetes,
+        I want to be able to search for and use recipes that others may have
+        already created, so I can avoid spending time getting it to run myself
+2.  Sharing resources for a software system:
+    1.  As an operator of a software system, I want to share the resources that
+        are required to use the system so that my users can easily consume
+        them in their own namespaces
+    2.  As a user of a software system running in Kubernetes, I want to consume
+        the shared resources associated with that system in my own namespace so
+        that I can use the system in my application
+3.  Sharing unique resources for a software system:
+    1.  As an operator of a software system, I want to be able to generate a
+        unique resource for each user that wants to use the system so that I can
+        manage permissions granularly
+    2.  As a user of a software system, I want to get a unique set of resources
+        for system in my namespace so that I can use the system in my
+        application
 
 ### Shared development database
 
