@@ -85,6 +85,14 @@ type ExtraConfig struct {
 
 	// Mechanism by which the Aggregator will resolve services. Required.
 	ServiceResolver ServiceResolver
+
+	// HACK(inheritance)
+	APIGroupListDiscoveryDecorator APIGroupListDiscoveryDecorator
+}
+
+// HACK(inheritance)
+type APIGroupListDiscoveryDecorator interface {
+	Decorate(clusterName string, input *metav1.APIGroupList)
 }
 
 // Config represents the configuration needed to create an APIAggregator.
@@ -235,9 +243,10 @@ func (c completedConfig) NewWithDelegate(delegationTarget genericapiserver.Deleg
 	}
 
 	apisHandler := &apisHandler{
-		codecs:         aggregatorscheme.Codecs,
-		lister:         s.lister,
-		discoveryGroup: discoveryGroup(enabledVersions),
+		codecs:                         aggregatorscheme.Codecs,
+		lister:                         s.lister,
+		discoveryGroup:                 discoveryGroup(enabledVersions),
+		apiGroupListDiscoveryDecorator: c.ExtraConfig.APIGroupListDiscoveryDecorator,
 	}
 	s.GenericAPIServer.Handler.NonGoRestfulMux.Handle("/apis", apisHandler)
 	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandle("/apis/", apisHandler)

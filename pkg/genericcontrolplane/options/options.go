@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/admission/plugin/webhook/mutating"
 	"k8s.io/apiserver/pkg/admission/plugin/webhook/validating"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -71,6 +72,14 @@ type ServerRunOptions struct {
 
 	// BuildHandlerChainFunc allows you to build custom handler chains by decorating the apiHandler.
 	BuildHandlerChainFunc func(apiHandler http.Handler, c *genericapiserver.Config) (secure http.Handler)
+
+	// HACK(inheritance)
+	APIGroupListDiscoveryDecorator APIGroupListDiscoveryDecorator
+}
+
+// HACK(inheritance)
+type APIGroupListDiscoveryDecorator interface {
+	Decorate(clusterName string, input *metav1.APIGroupList)
 }
 
 // NewServerRunOptions creates a new ServerRunOptions object with default parameters
@@ -89,8 +98,8 @@ func NewServerRunOptions() *ServerRunOptions {
 		Logs:                    logs.NewOptions(),
 		Traces:                  genericoptions.NewTracingOptions(),
 
-		EnableLogsHandler:                 true,
-		EventTTL:                          1 * time.Hour,
+		EnableLogsHandler: true,
+		EventTTL:          1 * time.Hour,
 
 		IdentityLeaseDurationSeconds:      3600,
 		IdentityLeaseRenewIntervalSeconds: 10,

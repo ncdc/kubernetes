@@ -43,6 +43,9 @@ type apisHandler struct {
 	codecs         serializer.CodecFactory
 	lister         listers.APIServiceLister
 	discoveryGroup metav1.APIGroup
+
+	// HACK(inheritance)
+	apiGroupListDiscoveryDecorator APIGroupListDiscoveryDecorator
 }
 
 func discoveryGroup(enabledVersions sets.String) metav1.APIGroup {
@@ -88,16 +91,31 @@ func (r *apisHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	//TODO(hack/inheritance): update the lister to support listing by logical cluster
+	var filtered []*apiregistrationv1api.APIService
+	for i := range apiServices {
+		s := apiServices[i]
+		if IsVersionForAllClusters(s.Spec) || s.ClusterName == clusterName {
+			filtered = append(filtered, s)
+		}
+	}
+	apiServices = filtered
+
 	apiServicesByGroup := apiregistrationv1apihelper.SortedByGroupAndVersion(apiServices)
 	for _, apiGroupServers := range apiServicesByGroup {
 		// skip the legacy group
 		if len(apiGroupServers[0].Spec.Group) == 0 {
 			continue
 		}
-		discoveryGroup := convertToDiscoveryAPIGroup(clusterName, apiGroupServers)
+		discoveryGroup := ConvertToDiscoveryAPIGroup(apiGroupServers)
 		if discoveryGroup != nil {
 			discoveryGroupList.Groups = append(discoveryGroupList.Groups, *discoveryGroup)
 		}
+	}
+
+	if r.apiGroupListDiscoveryDecorator != nil {
+		r.apiGroupListDiscoveryDecorator.Decorate(clusterName, discoveryGroupList)
 	}
 
 	responsewriters.WriteObjectNegotiated(r.codecs, negotiation.DefaultEndpointRestrictions, schema.GroupVersion{}, w, req, http.StatusOK, discoveryGroupList)
@@ -117,17 +135,13 @@ func IsGroupForAllClusters(group string) bool {
 	return genericcontrolplanescheme.Scheme.IsGroupRegistered(group) || extensionsapiserver.Scheme.IsGroupRegistered(group)
 }
 
-// convertToDiscoveryAPIGroup takes apiservices in a single group and returns a discovery compatible object.
+// ConvertToDiscoveryAPIGroup takes apiservices in a single group and returns a discovery compatible object.
 // if none of the services are available, it will return nil.
-func convertToDiscoveryAPIGroup(clusterName string, apiServices []*apiregistrationv1api.APIService) *metav1.APIGroup {
+func ConvertToDiscoveryAPIGroup(apiServices []*apiregistrationv1api.APIService) *metav1.APIGroup {
 	apiServicesByGroup := apiregistrationv1apihelper.SortedByGroupAndVersion(apiServices)[0]
 
 	var discoveryGroup *metav1.APIGroup
 	for _, apiService := range apiServicesByGroup {
-
-		if !IsVersionForAllClusters(apiService.Spec) && apiService.GetClusterName() != clusterName {
-			continue
-		}
 		// the first APIService which is valid becomes the default
 		if discoveryGroup == nil {
 			discoveryGroup = &metav1.APIGroup{
@@ -177,6 +191,16 @@ func (r *apiGroupHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	//TODO(hack/inheritance): update the lister to support listing by logical cluster
+	var filtered []*apiregistrationv1api.APIService
+	for i := range apiServices {
+		s := apiServices[i]
+		if IsVersionForAllClusters(s.Spec) || s.ClusterName == clusterName {
+			filtered = append(filtered, s)
+		}
+	}
+	apiServices = filtered
+
 	apiServicesForGroup := []*apiregistrationv1api.APIService{}
 	for _, apiService := range apiServices {
 		if apiService.Spec.Group == r.groupName && apiService.GetClusterName() == clusterName {
@@ -189,7 +213,7 @@ func (r *apiGroupHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	discoveryGroup := convertToDiscoveryAPIGroup(clusterName, apiServicesForGroup)
+	discoveryGroup := ConvertToDiscoveryAPIGroup(apiServicesForGroup)
 	if discoveryGroup == nil {
 		http.Error(w, "", http.StatusNotFound)
 		return
