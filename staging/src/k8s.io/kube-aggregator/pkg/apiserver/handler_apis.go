@@ -45,7 +45,11 @@ type apisHandler struct {
 	discoveryGroup metav1.APIGroup
 
 	// HACK(inheritance)
-	apiGroupListDiscoveryDecorator APIGroupListDiscoveryDecorator
+	decorator apisDecorator
+}
+
+type apisDecorator interface {
+	DecorateAPIs(clusterName string, input *metav1.APIGroupList)
 }
 
 func discoveryGroup(enabledVersions sets.String) metav1.APIGroup {
@@ -114,8 +118,8 @@ func (r *apisHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	if r.apiGroupListDiscoveryDecorator != nil {
-		r.apiGroupListDiscoveryDecorator.Decorate(clusterName, discoveryGroupList)
+	if r.decorator != nil {
+		r.decorator.DecorateAPIs(clusterName, discoveryGroupList)
 	}
 
 	responsewriters.WriteObjectNegotiated(r.codecs, negotiation.DefaultEndpointRestrictions, schema.GroupVersion{}, w, req, http.StatusOK, discoveryGroupList)
@@ -172,6 +176,13 @@ type apiGroupHandler struct {
 	lister listers.APIServiceLister
 
 	delegate http.Handler
+
+	// HACK(inheritance)
+	decorator apiGroupDecorator
+}
+
+type apiGroupDecorator interface {
+	DecorateAPIGroup(clusterName, groupName string) []*apiregistrationv1api.APIService
 }
 
 func (r *apiGroupHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -206,6 +217,11 @@ func (r *apiGroupHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if apiService.Spec.Group == r.groupName && apiService.GetClusterName() == clusterName {
 			apiServicesForGroup = append(apiServicesForGroup, apiService)
 		}
+	}
+
+	if r.decorator != nil {
+		apiServices := r.decorator.DecorateAPIGroup(clusterName, r.groupName)
+		apiServicesForGroup = append(apiServicesForGroup, apiServices...)
 	}
 
 	if len(apiServicesForGroup) == 0 {

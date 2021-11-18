@@ -28,6 +28,7 @@ import (
 	"k8s.io/apiserver/pkg/storage/storagebackend"
 	"k8s.io/component-base/logs"
 	"k8s.io/component-base/metrics"
+	apiregistrationv1api "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 
 	kubeoptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
 	"k8s.io/kubernetes/pkg/serviceaccount"
@@ -74,12 +75,13 @@ type ServerRunOptions struct {
 	BuildHandlerChainFunc func(apiHandler http.Handler, c *genericapiserver.Config) (secure http.Handler)
 
 	// HACK(inheritance)
-	APIGroupListDiscoveryDecorator APIGroupListDiscoveryDecorator
+	DiscoveryDecorator DiscoveryDecorator
 }
 
 // HACK(inheritance)
-type APIGroupListDiscoveryDecorator interface {
-	Decorate(clusterName string, input *metav1.APIGroupList)
+type DiscoveryDecorator interface {
+	DecorateAPIs(clusterName string, input *metav1.APIGroupList)
+	DecorateAPIGroup(clusterName, groupName string) []*apiregistrationv1api.APIService
 }
 
 // NewServerRunOptions creates a new ServerRunOptions object with default parameters

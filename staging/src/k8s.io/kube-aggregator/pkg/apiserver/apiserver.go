@@ -38,6 +38,7 @@ import (
 
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/client-go/tools/clusters"
+	apiregistrationv1api "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	v1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	v1helper "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1/helper"
 	"k8s.io/kube-aggregator/pkg/apis/apiregistration/v1beta1"
@@ -87,12 +88,13 @@ type ExtraConfig struct {
 	ServiceResolver ServiceResolver
 
 	// HACK(inheritance)
-	APIGroupListDiscoveryDecorator APIGroupListDiscoveryDecorator
+	DiscoveryDecorator DiscoveryDecorator
 }
 
 // HACK(inheritance)
-type APIGroupListDiscoveryDecorator interface {
-	Decorate(clusterName string, input *metav1.APIGroupList)
+type DiscoveryDecorator interface {
+	DecorateAPIs(clusterName string, input *metav1.APIGroupList)
+	DecorateAPIGroup(clusterName, groupName string) []*apiregistrationv1api.APIService
 }
 
 // Config represents the configuration needed to create an APIAggregator.
@@ -159,6 +161,9 @@ type APIAggregator struct {
 	// egressSelector selects the proper egress dialer to communicate with the custom apiserver
 	// overwrites proxyTransport dialer if not nil
 	egressSelector *egressselector.EgressSelector
+
+	// HACK(inheritance) needed for decorating APIGroup discovery via AddAPIService()
+	discoveryDecorator DiscoveryDecorator
 }
 
 // Complete fills in any fields not set that are required to have valid data. It's mutating the receiver.
@@ -206,6 +211,7 @@ func (c completedConfig) NewWithDelegate(delegationTarget genericapiserver.Deleg
 		openAPIConfig:              c.GenericConfig.OpenAPIConfig,
 		egressSelector:             c.GenericConfig.EgressSelector,
 		proxyCurrentCertKeyContent: func() (bytes []byte, bytes2 []byte) { return nil, nil },
+		discoveryDecorator:         c.ExtraConfig.DiscoveryDecorator,
 	}
 
 	s.GenericAPIServer.Handler.PathValidForCluster = func(path, clusterName string) bool {
@@ -243,10 +249,10 @@ func (c completedConfig) NewWithDelegate(delegationTarget genericapiserver.Deleg
 	}
 
 	apisHandler := &apisHandler{
-		codecs:                         aggregatorscheme.Codecs,
-		lister:                         s.lister,
-		discoveryGroup:                 discoveryGroup(enabledVersions),
-		apiGroupListDiscoveryDecorator: c.ExtraConfig.APIGroupListDiscoveryDecorator,
+		codecs:         aggregatorscheme.Codecs,
+		lister:         s.lister,
+		discoveryGroup: discoveryGroup(enabledVersions),
+		decorator:      c.ExtraConfig.DiscoveryDecorator,
 	}
 	s.GenericAPIServer.Handler.NonGoRestfulMux.Handle("/apis", apisHandler)
 	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandle("/apis/", apisHandler)
@@ -450,6 +456,7 @@ func (s *APIAggregator) AddAPIService(apiService *v1.APIService) error {
 		groupName: apiService.Spec.Group,
 		lister:    s.lister,
 		delegate:  s.delegateHandler,
+		decorator: s.discoveryDecorator,
 	}
 	// aggregation is protected
 
