@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/scheme"
 	storagelisters "k8s.io/client-go/listers/storage/v1"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/reference"
 	storagehelpers "k8s.io/component-helpers/storage/volume"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
@@ -338,7 +339,7 @@ func CheckAccessModes(claim *v1.PersistentVolumeClaim, volume *v1.PersistentVolu
 }
 
 func claimToClaimKey(claim *v1.PersistentVolumeClaim) string {
-	return fmt.Sprintf("%s/%s", claim.Namespace, claim.Name)
+	return cache.NamespaceNameKey(claim.Namespace, claim.Name)
 }
 
 // GetVolumeNodeAffinity returns a VolumeNodeAffinity for given key and value.

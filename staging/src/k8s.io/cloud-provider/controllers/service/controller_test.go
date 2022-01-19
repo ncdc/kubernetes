@@ -39,6 +39,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	core "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	fakecloud "k8s.io/cloud-provider/fake"
@@ -372,7 +373,7 @@ func TestSyncLoadBalancerIfNeeded(t *testing.T) {
 			defer cancel()
 			controller, cloud, client := newController()
 			cloud.Exists = tc.lbExists
-			key := fmt.Sprintf("%s/%s", tc.service.Namespace, tc.service.Name)
+			key := cache.NamespaceNameKey(tc.service.Namespace, tc.service.Name)
 			if _, err := client.CoreV1().Services(tc.service.Namespace).Create(ctx, tc.service, metav1.CreateOptions{}); err != nil {
 				t.Fatalf("Failed to prepare service %s for testing: %v", key, err)
 			}

@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -654,7 +654,7 @@ func (e *TokensController) getServiceAccount(ns string, name string, uid types.U
 
 func (e *TokensController) getSecret(ns string, name string, uid types.UID, fetchOnCacheMiss bool) (*v1.Secret, error) {
 	// Look up in cache
-	obj, exists, err := e.updatedSecrets.GetByKey(makeCacheKey(ns, name))
+	obj, exists, err := e.updatedSecrets.GetByKey(cache.NamespaceNameKey(ns, name))
 	if err != nil {
 		return nil, err
 	}
@@ -768,9 +768,4 @@ func parseSecretQueueKey(key interface{}) (secretQueueKey, error) {
 		return secretQueueKey{}, fmt.Errorf("invalid secret key: %#v", key)
 	}
 	return queueKey, nil
-}
-
-// produce the same key format as cache.MetaNamespaceKeyFunc
-func makeCacheKey(namespace, name string) string {
-	return namespace + "/" + name
 }

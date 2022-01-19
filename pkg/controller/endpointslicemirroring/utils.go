@@ -223,7 +223,7 @@ func endpointsControllerKey(endpointSlice *discovery.EndpointSlice) (string, err
 	if !ok || serviceName == "" {
 		return "", fmt.Errorf("EndpointSlice missing %s label", discovery.LabelServiceName)
 	}
-	return fmt.Sprintf("%s/%s", endpointSlice.Namespace, serviceName), nil
+	return cache.NamespaceNameKey(endpointSlice.Namespace, serviceName), nil
 }
 
 // skipMirror return true if the LabelSkipMirror label has been set to

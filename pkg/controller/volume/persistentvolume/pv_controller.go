@@ -1371,7 +1371,7 @@ func (ctrl *PersistentVolumeController) isVolumeUsed(pv *v1.PersistentVolume) ([
 		return nil, false, nil
 	}
 	podNames := sets.NewString()
-	pvcKey := fmt.Sprintf("%s/%s", pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.Name)
+	pvcKey := cache.NamespaceNameKey(pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.Name)
 	pods, err := ctrl.findPodsByPVCKey(pvcKey)
 	if err != nil {
 		return nil, false, fmt.Errorf("error finding pods by pvc %q: %s", pvcKey, err)
@@ -1387,7 +1387,7 @@ func (ctrl *PersistentVolumeController) isVolumeUsed(pv *v1.PersistentVolume) ([
 
 // findNonScheduledPodsByPVC returns list of non-scheduled active pods that reference given PVC.
 func (ctrl *PersistentVolumeController) findNonScheduledPodsByPVC(pvc *v1.PersistentVolumeClaim) ([]string, error) {
-	pvcKey := fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
+	pvcKey := cache.NamespaceNameKey(pvc.Namespace, pvc.Name)
 	pods, err := ctrl.findPodsByPVCKey(pvcKey)
 	if err != nil {
 		return nil, err

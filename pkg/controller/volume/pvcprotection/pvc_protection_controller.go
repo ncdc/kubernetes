@@ -230,7 +230,7 @@ func (c *Controller) askInformer(pvc *v1.PersistentVolumeClaim) (bool, error) {
 	klog.V(4).InfoS("Looking for Pods using PVC in the Informer's cache", "PVC", klog.KObj(pvc))
 
 	// The indexer is used to find pods which might use the PVC.
-	objs, err := c.podIndexer.ByIndex(common.PodPVCIndex, fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name))
+	objs, err := c.podIndexer.ByIndex(common.PodPVCIndex, cache.NamespaceNameKey(pvc.Namespace, pvc.Name))
 	if err != nil {
 		return false, fmt.Errorf("cache-based list of pods failed while processing %s/%s: %s", pvc.Namespace, pvc.Name, err.Error())
 	}

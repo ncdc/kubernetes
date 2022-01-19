@@ -970,10 +970,8 @@ func FilterReplicaSets(RSes []*apps.ReplicaSet, filterFn filterRS) []*apps.Repli
 
 // PodKey returns a key unique to the given pod within a cluster.
 // It's used so we consistently use the same key scheme in this module.
-// It does exactly what cache.MetaNamespaceKeyFunc would have done
-// except there's not possibility for error since we know the exact type.
 func PodKey(pod *v1.Pod) string {
-	return fmt.Sprintf("%v/%v", pod.Namespace, pod.Name)
+	return cache.NamespaceNameKey(pod.Namespace, pod.Name)
 }
 
 // ControllersByCreationTimestamp sorts a list of ReplicationControllers by creation timestamp, using their names as a tie breaker.

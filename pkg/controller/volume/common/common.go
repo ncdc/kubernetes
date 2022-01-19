@@ -17,8 +17,6 @@ limitations under the License.
 package common
 
 import (
-	"fmt"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/component-helpers/storage/ephemeral"
@@ -47,7 +45,7 @@ func PodPVCIndexFunc() func(obj interface{}) ([]string, error) {
 				claimName = ephemeral.VolumeClaimName(pod, &podVolume)
 			}
 			if claimName != "" {
-				keys = append(keys, fmt.Sprintf("%s/%s", pod.Namespace, claimName))
+				keys = append(keys, cache.NamespaceNameKey(pod.Namespace, claimName))
 			}
 		}
 		return keys, nil

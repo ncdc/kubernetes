@@ -239,7 +239,7 @@ func serviceControllerKey(endpointSlice *discovery.EndpointSlice) (string, error
 	if !ok || serviceName == "" {
 		return "", fmt.Errorf("EndpointSlice missing %s label", discovery.LabelServiceName)
 	}
-	return fmt.Sprintf("%s/%s", endpointSlice.Namespace, serviceName), nil
+	return cache.NamespaceNameKey(endpointSlice.Namespace, serviceName), nil
 }
 
 // setEndpointSliceLabels returns a map with the new endpoint slices labels and true if there was an update.

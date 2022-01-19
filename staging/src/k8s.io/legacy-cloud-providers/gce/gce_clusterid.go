@@ -29,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -73,7 +73,7 @@ type ClusterID struct {
 // Continually watches for changes to the cluster id config map
 func (g *Cloud) watchClusterID(stop <-chan struct{}) {
 	g.ClusterID = ClusterID{
-		cfgMapKey: fmt.Sprintf("%v/%v", UIDNamespace, UIDConfigMapName),
+		cfgMapKey: cache.NamespaceNameKey(UIDNamespace, UIDConfigMapName),
 		client:    g.client,
 	}
 
