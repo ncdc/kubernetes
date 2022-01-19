@@ -47,7 +47,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-	"k8s.io/kubernetes/pkg/controller"
 	metricsclient "k8s.io/kubernetes/pkg/controller/podautoscaler/metrics"
 )
 
@@ -185,7 +184,7 @@ func (a *HorizontalController) updateHPA(old, cur interface{}) {
 
 // obj could be an *v1.HorizontalPodAutoscaler, or a DeletionFinalStateUnknown marker item.
 func (a *HorizontalController) enqueueHPA(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %+v: %v", obj, err))
 		return
@@ -198,7 +197,7 @@ func (a *HorizontalController) enqueueHPA(obj interface{}) {
 }
 
 func (a *HorizontalController) deleteHPA(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %+v: %v", obj, err))
 		return

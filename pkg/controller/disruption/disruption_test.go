@@ -60,7 +60,7 @@ type pdbStates map[string]policy.PodDisruptionBudget
 var alwaysReady = func() bool { return true }
 
 func (ps *pdbStates) Set(pdb *policy.PodDisruptionBudget) error {
-	key, err := controller.KeyFunc(pdb)
+	key, err := cache.ObjectKey(pdb)
 	if err != nil {
 		return err
 	}
@@ -224,7 +224,7 @@ func newMinAvailablePodDisruptionBudget(t *testing.T, minAvailable intstr.IntOrS
 		},
 	}
 
-	pdbName, err := controller.KeyFunc(pdb)
+	pdbName, err := cache.ObjectKey(pdb)
 	if err != nil {
 		t.Fatalf("Unexpected error naming pdb %q: %v", pdb.Name, err)
 	}
@@ -247,7 +247,7 @@ func newMaxUnavailablePodDisruptionBudget(t *testing.T, maxUnavailable intstr.In
 		},
 	}
 
-	pdbName, err := controller.KeyFunc(pdb)
+	pdbName, err := cache.ObjectKey(pdb)
 	if err != nil {
 		t.Fatalf("Unexpected error naming pdb %q: %v", pdb.Name, err)
 	}
@@ -296,7 +296,7 @@ func newPod(t *testing.T, name string) (*v1.Pod, string) {
 		},
 	}
 
-	podName, err := controller.KeyFunc(pod)
+	podName, err := cache.ObjectKey(pod)
 	if err != nil {
 		t.Fatalf("Unexpected error naming pod %q: %v", pod.Name, err)
 	}
@@ -320,7 +320,7 @@ func newReplicationController(t *testing.T, size int32) (*v1.ReplicationControll
 		},
 	}
 
-	rcName, err := controller.KeyFunc(rc)
+	rcName, err := cache.ObjectKey(rc)
 	if err != nil {
 		t.Fatalf("Unexpected error naming RC %q", rc.Name)
 	}
@@ -344,7 +344,7 @@ func newDeployment(t *testing.T, size int32) (*apps.Deployment, string) {
 		},
 	}
 
-	dName, err := controller.KeyFunc(d)
+	dName, err := cache.ObjectKey(d)
 	if err != nil {
 		t.Fatalf("Unexpected error naming Deployment %q: %v", d.Name, err)
 	}
@@ -368,7 +368,7 @@ func newReplicaSet(t *testing.T, size int32) (*apps.ReplicaSet, string) {
 		},
 	}
 
-	rsName, err := controller.KeyFunc(rs)
+	rsName, err := cache.ObjectKey(rs)
 	if err != nil {
 		t.Fatalf("Unexpected error naming ReplicaSet %q: %v", rs.Name, err)
 	}
@@ -392,7 +392,7 @@ func newStatefulSet(t *testing.T, size int32) (*apps.StatefulSet, string) {
 		},
 	}
 
-	ssName, err := controller.KeyFunc(ss)
+	ssName, err := cache.ObjectKey(ss)
 	if err != nil {
 		t.Fatalf("Unexpected error naming StatefulSet %q: %v", ss.Name, err)
 	}

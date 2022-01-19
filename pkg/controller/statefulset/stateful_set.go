@@ -386,7 +386,7 @@ func (ssc *StatefulSetController) resolveControllerRef(namespace string, control
 
 // enqueueStatefulSet enqueues the given statefulset in the work queue.
 func (ssc *StatefulSetController) enqueueStatefulSet(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %+v: %v", obj, err))
 		return
@@ -396,7 +396,7 @@ func (ssc *StatefulSetController) enqueueStatefulSet(obj interface{}) {
 
 // enqueueStatefulSet enqueues the given statefulset in the work queue after given time
 func (ssc *StatefulSetController) enqueueSSAfter(ss *apps.StatefulSet, duration time.Duration) {
-	key, err := controller.KeyFunc(ss)
+	key, err := cache.ObjectKey(ss)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", ss, err))
 		return

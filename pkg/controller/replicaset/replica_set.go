@@ -37,7 +37,7 @@ import (
 	"time"
 
 	apps "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -266,7 +266,7 @@ func (rsc *ReplicaSetController) resolveControllerRef(namespace string, controll
 }
 
 func (rsc *ReplicaSetController) enqueueRS(rs *apps.ReplicaSet) {
-	key, err := controller.KeyFunc(rs)
+	key, err := cache.ObjectKey(rs)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", rs, err))
 		return
@@ -276,7 +276,7 @@ func (rsc *ReplicaSetController) enqueueRS(rs *apps.ReplicaSet) {
 }
 
 func (rsc *ReplicaSetController) enqueueRSAfter(rs *apps.ReplicaSet, duration time.Duration) {
-	key, err := controller.KeyFunc(rs)
+	key, err := cache.ObjectKey(rs)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", rs, err))
 		return
@@ -298,7 +298,7 @@ func (rsc *ReplicaSetController) updateRS(old, cur interface{}) {
 
 	// TODO: make a KEP and fix informers to always call the delete event handler on re-create
 	if curRS.UID != oldRS.UID {
-		key, err := controller.KeyFunc(oldRS)
+		key, err := cache.ObjectKey(oldRS)
 		if err != nil {
 			utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", oldRS, err))
 			return
@@ -342,7 +342,7 @@ func (rsc *ReplicaSetController) deleteRS(obj interface{}) {
 		}
 	}
 
-	key, err := controller.KeyFunc(rs)
+	key, err := cache.ObjectKey(rs)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", rs, err))
 		return
@@ -373,7 +373,7 @@ func (rsc *ReplicaSetController) addPod(obj interface{}) {
 		if rs == nil {
 			return
 		}
-		rsKey, err := controller.KeyFunc(rs)
+		rsKey, err := cache.ObjectKey(rs)
 		if err != nil {
 			return
 		}
@@ -503,7 +503,7 @@ func (rsc *ReplicaSetController) deletePod(obj interface{}) {
 	if rs == nil {
 		return
 	}
-	rsKey, err := controller.KeyFunc(rs)
+	rsKey, err := cache.ObjectKey(rs)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", rs, err))
 		return
@@ -544,7 +544,7 @@ func (rsc *ReplicaSetController) processNextWorkItem(ctx context.Context) bool {
 // It will requeue the replica set in case of an error while creating/deleting pods.
 func (rsc *ReplicaSetController) manageReplicas(ctx context.Context, filteredPods []*v1.Pod, rs *apps.ReplicaSet) error {
 	diff := len(filteredPods) - int(*(rs.Spec.Replicas))
-	rsKey, err := controller.KeyFunc(rs)
+	rsKey, err := cache.ObjectKey(rs)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for %v %#v: %v", rsc.Kind, rs, err))
 		return nil

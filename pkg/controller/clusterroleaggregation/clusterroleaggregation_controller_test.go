@@ -32,8 +32,6 @@ import (
 	rbaclisters "k8s.io/client-go/listers/rbac/v1"
 	clienttesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
-
-	"k8s.io/kubernetes/pkg/controller"
 )
 
 func TestSyncClusterRole(t *testing.T) {
@@ -162,7 +160,7 @@ func TestSyncClusterRole(t *testing.T) {
 	for _, serverSideApplyEnabled := range []bool{true, false} {
 		for _, test := range tests {
 			t.Run(test.name, func(t *testing.T) {
-				indexer := cache.NewIndexer(controller.KeyFunc, cache.Indexers{})
+				indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{})
 				objs := []runtime.Object{}
 				for _, obj := range test.startingClusterRoles {
 					objs = append(objs, obj)

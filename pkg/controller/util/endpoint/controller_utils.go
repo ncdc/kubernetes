@@ -33,7 +33,6 @@ import (
 	v1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
-	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/util/hash"
 )
 
@@ -90,7 +89,7 @@ func (sc *ServiceSelectorCache) GetPodServiceMemberships(serviceLister v1listers
 			// if the service has a nil selector this means selectors match nothing, not everything.
 			continue
 		}
-		key, err := controller.KeyFunc(service)
+		key, err := cache.ObjectKey(service)
 		if err != nil {
 			return nil, err
 		}

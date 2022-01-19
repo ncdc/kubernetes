@@ -25,7 +25,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -184,7 +184,7 @@ func (rq *Controller) enqueueAll() {
 		return
 	}
 	for i := range rqs {
-		key, err := controller.KeyFunc(rqs[i])
+		key, err := cache.ObjectKey(rqs[i])
 		if err != nil {
 			utilruntime.HandleError(fmt.Errorf("couldn't get key for object %+v: %v", rqs[i], err))
 			continue
@@ -195,7 +195,7 @@ func (rq *Controller) enqueueAll() {
 
 // obj could be an *v1.ResourceQuota, or a DeletionFinalStateUnknown marker item.
 func (rq *Controller) enqueueResourceQuota(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		klog.Errorf("Couldn't get key for object %+v: %v", obj, err)
 		return
@@ -204,7 +204,7 @@ func (rq *Controller) enqueueResourceQuota(obj interface{}) {
 }
 
 func (rq *Controller) addQuota(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		klog.Errorf("Couldn't get key for object %+v: %v", obj, err)
 		return

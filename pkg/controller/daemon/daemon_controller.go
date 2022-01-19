@@ -233,7 +233,7 @@ func (dsc *DaemonSetsController) updateDaemonset(cur, old interface{}) {
 
 	// TODO: make a KEP and fix informers to always call the delete event handler on re-create
 	if curDS.UID != oldDS.UID {
-		key, err := controller.KeyFunc(oldDS)
+		key, err := cache.ObjectKey(oldDS)
 		if err != nil {
 			utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", oldDS, err))
 			return
@@ -264,7 +264,7 @@ func (dsc *DaemonSetsController) deleteDaemonset(obj interface{}) {
 	}
 	klog.V(4).Infof("Deleting daemon set %s", ds.Name)
 
-	key, err := controller.KeyFunc(ds)
+	key, err := cache.ObjectKey(ds)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", ds, err))
 		return
@@ -323,7 +323,7 @@ func (dsc *DaemonSetsController) processNextWorkItem(ctx context.Context) bool {
 }
 
 func (dsc *DaemonSetsController) enqueue(ds *apps.DaemonSet) {
-	key, err := controller.KeyFunc(ds)
+	key, err := cache.ObjectKey(ds)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Couldn't get key for object %#v: %v", ds, err))
 		return
@@ -334,7 +334,7 @@ func (dsc *DaemonSetsController) enqueue(ds *apps.DaemonSet) {
 }
 
 func (dsc *DaemonSetsController) enqueueDaemonSetAfter(obj interface{}, after time.Duration) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Couldn't get key for object %+v: %v", obj, err))
 		return
@@ -506,7 +506,7 @@ func (dsc *DaemonSetsController) addPod(obj interface{}) {
 		if ds == nil {
 			return
 		}
-		dsKey, err := controller.KeyFunc(ds)
+		dsKey, err := cache.ObjectKey(ds)
 		if err != nil {
 			return
 		}
@@ -623,7 +623,7 @@ func (dsc *DaemonSetsController) deletePod(obj interface{}) {
 	if ds == nil {
 		return
 	}
-	dsKey, err := controller.KeyFunc(ds)
+	dsKey, err := cache.ObjectKey(ds)
 	if err != nil {
 		return
 	}
@@ -944,7 +944,7 @@ func (dsc *DaemonSetsController) manage(ctx context.Context, ds *apps.DaemonSet,
 // returns slice with errors if any
 func (dsc *DaemonSetsController) syncNodes(ctx context.Context, ds *apps.DaemonSet, podsToDelete, nodesNeedingDaemonPods []string, hash string) error {
 	// We need to set expectations before creating/deleting pods to avoid race conditions.
-	dsKey, err := controller.KeyFunc(ds)
+	dsKey, err := cache.ObjectKey(ds)
 	if err != nil {
 		return fmt.Errorf("couldn't get key for object %#v: %v", ds, err)
 	}
@@ -1200,7 +1200,7 @@ func (dsc *DaemonSetsController) syncDaemonSet(ctx context.Context, key string) 
 	// Don't process a daemon set until all its creations and deletions have been processed.
 	// For example if daemon set foo asked for 3 new daemon pods in the previous call to manage,
 	// then we do not want to call manage on foo until the daemon pods have been created.
-	dsKey, err := controller.KeyFunc(ds)
+	dsKey, err := cache.ObjectKey(ds)
 	if err != nil {
 		return fmt.Errorf("couldn't get key for object %#v: %v", ds, err)
 	}

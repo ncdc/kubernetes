@@ -36,7 +36,6 @@ import (
 	"k8s.io/component-base/metrics/prometheus/ratelimiter"
 	"k8s.io/klog/v2"
 	api "k8s.io/kubernetes/pkg/apis/core"
-	"k8s.io/kubernetes/pkg/controller"
 )
 
 // TokenCleanerOptions contains options for the TokenCleaner
@@ -128,7 +127,7 @@ func (tc *TokenCleaner) Run(ctx context.Context) {
 }
 
 func (tc *TokenCleaner) enqueueSecrets(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(err)
 		return
@@ -203,7 +202,7 @@ func (tc *TokenCleaner) evalSecret(ctx context.Context, o interface{}) {
 			klog.V(3).Infof("Error deleting Secret: %v", err)
 		}
 	} else if ttl > 0 {
-		key, err := controller.KeyFunc(o)
+		key, err := cache.ObjectKey(o)
 		if err != nil {
 			utilruntime.HandleError(err)
 			return

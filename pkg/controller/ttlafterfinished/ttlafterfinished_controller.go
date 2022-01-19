@@ -24,7 +24,7 @@ import (
 	"k8s.io/klog/v2"
 
 	batch "k8s.io/api/batch/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -38,7 +38,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/component-base/metrics/prometheus/ratelimiter"
 	"k8s.io/kubectl/pkg/scheme"
-	"k8s.io/kubernetes/pkg/controller"
 	jobutil "k8s.io/kubernetes/pkg/controller/job"
 	"k8s.io/kubernetes/pkg/controller/ttlafterfinished/metrics"
 	"k8s.io/utils/clock"
@@ -140,7 +139,7 @@ func (tc *Controller) updateJob(old, cur interface{}) {
 
 func (tc *Controller) enqueue(job *batch.Job) {
 	klog.V(4).Infof("Add job %s/%s to cleanup", job.Namespace, job.Name)
-	key, err := controller.KeyFunc(job)
+	key, err := cache.ObjectKey(job)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", job, err))
 		return
@@ -150,7 +149,7 @@ func (tc *Controller) enqueue(job *batch.Job) {
 }
 
 func (tc *Controller) enqueueAfter(job *batch.Job, after time.Duration) {
-	key, err := controller.KeyFunc(job)
+	key, err := cache.ObjectKey(job)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", job, err))
 		return

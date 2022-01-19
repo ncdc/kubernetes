@@ -19,10 +19,11 @@ package persistentvolume
 import (
 	"context"
 	"fmt"
-	"k8s.io/kubernetes/pkg/features"
-	"k8s.io/kubernetes/pkg/util/slice"
 	"strconv"
 	"time"
+
+	"k8s.io/kubernetes/pkg/features"
+	"k8s.io/kubernetes/pkg/util/slice"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -43,7 +44,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	cloudprovider "k8s.io/cloud-provider"
 	csitrans "k8s.io/csi-translation-lib"
-	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/volume/common"
 	"k8s.io/kubernetes/pkg/controller/volume/persistentvolume/metrics"
 	pvutil "k8s.io/kubernetes/pkg/controller/volume/persistentvolume/util"
@@ -187,7 +187,7 @@ func (ctrl *PersistentVolumeController) enqueueWork(queue workqueue.Interface, o
 	if unknown, ok := obj.(cache.DeletedFinalStateUnknown); ok && unknown.Obj != nil {
 		obj = unknown.Obj
 	}
-	objName, err := controller.KeyFunc(obj)
+	objName, err := cache.ObjectKey(obj)
 	if err != nil {
 		klog.Errorf("failed to get key from object: %v", err)
 		return
@@ -623,7 +623,7 @@ func getVolumeStatusForLogging(volume *v1.PersistentVolume) string {
 // controller itself. Returns "true", if the cache was updated, false if the
 // object is an old version and should be ignored.
 func storeObjectUpdate(store cache.Store, obj interface{}, className string) (bool, error) {
-	objName, err := controller.KeyFunc(obj)
+	objName, err := cache.ObjectKey(obj)
 	if err != nil {
 		return false, fmt.Errorf("couldn't get key for object %+v: %w", obj, err)
 	}

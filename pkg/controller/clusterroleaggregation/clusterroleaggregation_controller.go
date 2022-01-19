@@ -39,8 +39,6 @@ import (
 	rbaclisters "k8s.io/client-go/listers/rbac/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-
-	"k8s.io/kubernetes/pkg/controller"
 )
 
 // ClusterRoleAggregationController is a controller to combine cluster roles
@@ -243,7 +241,7 @@ func (c *ClusterRoleAggregationController) enqueue() {
 		if clusterRole.AggregationRule == nil {
 			continue
 		}
-		key, err := controller.KeyFunc(clusterRole)
+		key, err := cache.ObjectKey(clusterRole)
 		if err != nil {
 			utilruntime.HandleError(fmt.Errorf("Couldn't get key for object %#v: %v", clusterRole, err))
 			return
