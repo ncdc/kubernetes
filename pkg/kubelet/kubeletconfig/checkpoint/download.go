@@ -19,9 +19,10 @@ package checkpoint
 import (
 	"context"
 	"fmt"
-	"k8s.io/klog/v2"
 	"math/rand"
 	"time"
+
+	"k8s.io/klog/v2"
 
 	apiv1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -247,7 +248,7 @@ func (r *remoteConfigMap) NodeConfigSource() *apiv1.NodeConfigSource {
 }
 
 func getConfigMapFromStore(store cache.Store, namespace, name string) (*apiv1.ConfigMap, error) {
-	key := fmt.Sprintf("%s/%s", namespace, name)
+	key := cache.NamespaceNameKey(namespace, name)
 	obj, ok, err := store.GetByKey(key)
 	if err != nil || !ok {
 		return nil, err

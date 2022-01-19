@@ -32,6 +32,7 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/controller/endpointslice/metrics"
 	"k8s.io/kubernetes/pkg/controller/endpointslice/topologycache"
@@ -235,7 +236,7 @@ func (r *reconciler) reconcileByAddressType(service *corev1.Service, pods []*cor
 	// theoretically possible for endpoints of one address type to be assigned
 	// hints while another endpoints of another address type are not.
 	si := &topologycache.SliceInfo{
-		ServiceKey: fmt.Sprintf("%s/%s", service.Namespace, service.Name),
+		ServiceKey: cache.NamespaceNameKey(service.Namespace, service.Name),
 		ToCreate:   slicesToCreate,
 		ToUpdate:   slicesToUpdate,
 		Unchanged:  unchangedSlices(existingSlices, slicesToUpdate, slicesToDelete),

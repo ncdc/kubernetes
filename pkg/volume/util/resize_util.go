@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/volume"
 	volumetypes "k8s.io/kubernetes/pkg/volume/util/types"
@@ -56,7 +57,7 @@ type resizeProcessStatus struct {
 
 // ClaimToClaimKey return namespace/name string for pvc
 func ClaimToClaimKey(claim *v1.PersistentVolumeClaim) string {
-	return fmt.Sprintf("%s/%s", claim.Namespace, claim.Name)
+	return cache.NamespaceNameKey(claim.Namespace, claim.Name)
 }
 
 // UpdatePVSize updates just pv size after cloudprovider resizing is successful

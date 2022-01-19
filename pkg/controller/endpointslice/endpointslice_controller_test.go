@@ -199,7 +199,7 @@ func TestSyncServiceMissing(t *testing.T) {
 	missingServiceKey := endpointutil.ServiceKey{Name: missingServiceName, Namespace: namespace}
 	esController.triggerTimeTracker.ServiceStates[missingServiceKey] = endpointutil.ServiceState{}
 
-	err := esController.syncService(fmt.Sprintf("%s/%s", namespace, missingServiceName))
+	err := esController.syncService(cache.NamespaceNameKey(namespace, missingServiceName))
 
 	// nil should be returned when the service doesn't exist
 	assert.Nil(t, err, "Expected no error syncing service")
@@ -1054,7 +1054,7 @@ func TestSyncService(t *testing.T) {
 			_, err := esController.client.CoreV1().Services(testcase.service.Namespace).Create(context.TODO(), testcase.service, metav1.CreateOptions{})
 			assert.Nil(t, err, "Expected no error creating service")
 
-			err = esController.syncService(fmt.Sprintf("%s/%s", testcase.service.Namespace, testcase.service.Name))
+			err = esController.syncService(cache.NamespaceNameKey(testcase.service.Namespace, testcase.service.Name))
 			assert.Nil(t, err)
 
 			// last action should be to create endpoint slice
@@ -1721,7 +1721,7 @@ func standardSyncService(t *testing.T, esController *endpointSliceController, na
 	t.Helper()
 	createService(t, esController, namespace, serviceName)
 
-	err := esController.syncService(fmt.Sprintf("%s/%s", namespace, serviceName))
+	err := esController.syncService(cache.NamespaceNameKey(namespace, serviceName))
 	assert.Nil(t, err, "Expected no error syncing service")
 }
 

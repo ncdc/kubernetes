@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	listersv1 "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/kube-scheduler/config/v1beta3"
 	"k8s.io/kubernetes/pkg/scheduler"
 	schedulerconfig "k8s.io/kubernetes/pkg/scheduler/apis/config"
@@ -253,7 +254,7 @@ func (fp *FilterPlugin) Filter(ctx context.Context, state *framework.CycleState,
 
 	if fp.numCalledPerPod != nil {
 		fp.Lock()
-		fp.numCalledPerPod[fmt.Sprintf("%v/%v", pod.Namespace, pod.Name)]++
+		fp.numCalledPerPod[cache.NamespaceNameKey(pod.Namespace, pod.Name)]++
 		fp.Unlock()
 	}
 
@@ -2100,7 +2101,7 @@ func TestPreemptWithPermitPlugin(t *testing.T) {
 				}
 
 				filterPlugin.RLock()
-				waitingPodCalled := filterPlugin.numCalledPerPod[fmt.Sprintf("%v/%v", w.Namespace, w.Name)]
+				waitingPodCalled := filterPlugin.numCalledPerPod[cache.NamespaceNameKey(w.Namespace, w.Name)]
 				filterPlugin.RUnlock()
 				if waitingPodCalled > tt.maxNumWaitingPodCalled {
 					t.Fatalf("Expected the waiting pod to be called %v times at most, but got %v", tt.maxNumWaitingPodCalled, waitingPodCalled)
@@ -2176,7 +2177,7 @@ func (j *JobPlugin) PostBind(_ context.Context, state *framework.CycleState, p *
 			if s, ok := c.(*framework.PodsToActivate); ok {
 				s.Lock()
 				for _, pod := range podsToActivate {
-					namespacedName := fmt.Sprintf("%v/%v", pod.Namespace, pod.Name)
+					namespacedName := cache.NamespaceNameKey(pod.Namespace, pod.Name)
 					s.Map[namespacedName] = pod
 				}
 				s.Unlock()

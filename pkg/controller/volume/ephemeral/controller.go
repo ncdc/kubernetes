@@ -153,7 +153,7 @@ func (ec *ephemeralController) onPVCDelete(obj interface{}) {
 	// The common indexer does some prefiltering for us by
 	// limiting the list to those pods which reference
 	// the PVC.
-	objs, err := ec.podIndexer.ByIndex(common.PodPVCIndex, fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name))
+	objs, err := ec.podIndexer.ByIndex(common.PodPVCIndex, cache.NamespaceNameKey(pvc.Namespace, pvc.Name))
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("listing pods from cache: %v", err))
 		return

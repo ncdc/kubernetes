@@ -235,7 +235,7 @@ func TestSyncEndpoints(t *testing.T) {
 				}
 			}
 
-			err := esController.syncEndpoints(fmt.Sprintf("%s/%s", namespace, endpointsName))
+			err := esController.syncEndpoints(cache.NamespaceNameKey(namespace, endpointsName))
 			if err != nil {
 				t.Fatalf("Unexpected error from syncEndpoints: %v", err)
 			}
