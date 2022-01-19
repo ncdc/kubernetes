@@ -112,10 +112,7 @@ func MetaNamespaceKeyFunc(obj interface{}) (string, error) {
 	}
 
 	name := clusters.ToClusterAwareKey(metaObj.GetClusterName(), metaObj.GetName())
-	if len(metaObj.GetNamespace()) > 0 {
-		return metaObj.GetNamespace() + "/" + name, nil
-	}
-	return name, nil
+	return namespaceNameToKey(metaObj.GetNamespace(), name), nil
 }
 
 // SplitMetaNamespaceKey returns the namespace and name that
@@ -135,6 +132,53 @@ func SplitMetaNamespaceKey(key string) (namespace, name string, err error) {
 	}
 
 	return "", "", fmt.Errorf("unexpected key format: %q", key)
+}
+
+// namespaceNameToKey encodes namespace and name to a key as a string.
+func namespaceNameToKey(namespace, name string) string {
+	if namespace != "" {
+		return namespace + "/" + name
+	}
+	return name
+}
+
+// QueueKey is a queue key.
+type QueueKey interface {
+	// Namespace returns the namespace for this queue key. For cluster-scoped keys, this is empty.
+	Namespace() string
+	// Name returns the name for this queue key.
+	Name() string
+}
+
+// queueKey implements QueueKey.
+type queueKey struct {
+	namespace, name string
+}
+
+// Namespace returns the namespace for this queue key. For cluster-scoped keys, this is empty.
+func (k *queueKey) Namespace() string {
+	return k.namespace
+}
+
+// Name returns the name for this queue key.
+func (k *queueKey) Name() string {
+	return k.name
+}
+
+// DecodeKeyFunc decodes a key into a QueueKey.
+type DecodeKeyFunc func(key string) (QueueKey, error)
+
+// DecodeMetaNamespaceKey decodes key to a QueueKey using SplitMetaNamespaceKey.
+func DecodeMetaNamespaceKey(key string) (QueueKey, error) {
+	ns, name, err := SplitMetaNamespaceKey(key)
+	if err != nil {
+		return nil, err
+	}
+
+	return &queueKey{
+		namespace: ns,
+		name:      name,
+	}, nil
 }
 
 // `*cache` implements Indexer in terms of a ThreadSafeStore and an
