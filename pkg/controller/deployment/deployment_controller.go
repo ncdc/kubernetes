@@ -29,7 +29,7 @@ import (
 	"k8s.io/klog/v2"
 
 	apps "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -376,7 +376,7 @@ func (dc *DeploymentController) deletePod(obj interface{}) {
 }
 
 func (dc *DeploymentController) enqueue(deployment *apps.Deployment) {
-	key, err := controller.KeyFunc(deployment)
+	key, err := cache.ObjectKey(deployment)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", deployment, err))
 		return
@@ -386,7 +386,7 @@ func (dc *DeploymentController) enqueue(deployment *apps.Deployment) {
 }
 
 func (dc *DeploymentController) enqueueRateLimited(deployment *apps.Deployment) {
-	key, err := controller.KeyFunc(deployment)
+	key, err := cache.ObjectKey(deployment)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", deployment, err))
 		return
@@ -397,7 +397,7 @@ func (dc *DeploymentController) enqueueRateLimited(deployment *apps.Deployment) 
 
 // enqueueAfter will enqueue a deployment after the provided amount of time.
 func (dc *DeploymentController) enqueueAfter(deployment *apps.Deployment, after time.Duration) {
-	key, err := controller.KeyFunc(deployment)
+	key, err := cache.ObjectKey(deployment)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", deployment, err))
 		return

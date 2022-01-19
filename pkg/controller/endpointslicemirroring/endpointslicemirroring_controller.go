@@ -40,7 +40,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/component-base/metrics/prometheus/ratelimiter"
 	"k8s.io/klog/v2"
-	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/endpointslicemirroring/metrics"
 	endpointsliceutil "k8s.io/kubernetes/pkg/controller/util/endpointslice"
 )
@@ -330,7 +329,7 @@ func (c *Controller) syncEndpoints(key string) error {
 
 // queueEndpoints queues the Endpoints resource for processing.
 func (c *Controller) queueEndpoints(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Couldn't get key for object %+v (type %T): %v", obj, obj, err))
 		return

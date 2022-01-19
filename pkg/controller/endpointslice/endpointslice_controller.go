@@ -41,7 +41,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/component-base/metrics/prometheus/ratelimiter"
 	"k8s.io/klog/v2"
-	"k8s.io/kubernetes/pkg/controller"
 	endpointslicemetrics "k8s.io/kubernetes/pkg/controller/endpointslice/metrics"
 	"k8s.io/kubernetes/pkg/controller/endpointslice/topologycache"
 	endpointutil "k8s.io/kubernetes/pkg/controller/util/endpoint"
@@ -390,7 +389,7 @@ func (c *Controller) syncService(key string) error {
 
 // onServiceUpdate updates the Service Selector in the cache and queues the Service for processing.
 func (c *Controller) onServiceUpdate(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Couldn't get key for object %+v: %v", obj, err))
 		return
@@ -402,7 +401,7 @@ func (c *Controller) onServiceUpdate(obj interface{}) {
 
 // onServiceDelete removes the Service Selector from the cache and queues the Service for processing.
 func (c *Controller) onServiceDelete(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Couldn't get key for object %+v: %v", obj, err))
 		return

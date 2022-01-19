@@ -34,7 +34,7 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -47,7 +47,6 @@ import (
 	listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/kubernetes/pkg/controller"
 
 	"k8s.io/klog/v2"
 )
@@ -193,7 +192,7 @@ func (ttlc *Controller) deleteNode(obj interface{}) {
 }
 
 func (ttlc *Controller) enqueueNode(node *v1.Node) {
-	key, err := controller.KeyFunc(node)
+	key, err := cache.ObjectKey(node)
 	if err != nil {
 		klog.Errorf("Couldn't get key for object %+v", node)
 		return

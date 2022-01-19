@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	core "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	_ "k8s.io/kubernetes/pkg/apis/apps/install"
 	_ "k8s.io/kubernetes/pkg/apis/authentication/install"
@@ -688,7 +689,7 @@ func TestAddReplicaSet(t *testing.T) {
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for rs %v", rs1.Name)
 	}
-	expectedKey, _ := controller.KeyFunc(d1)
+	expectedKey, _ := cache.ObjectKey(d1)
 	if got, want := key.(string), expectedKey; got != want {
 		t.Errorf("queue.Get() = %v, want %v", got, want)
 	}
@@ -701,7 +702,7 @@ func TestAddReplicaSet(t *testing.T) {
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for rs %v", rs2.Name)
 	}
-	expectedKey, _ = controller.KeyFunc(d2)
+	expectedKey, _ = cache.ObjectKey(d2)
 	if got, want := key.(string), expectedKey; got != want {
 		t.Errorf("queue.Get() = %v, want %v", got, want)
 	}
@@ -769,7 +770,7 @@ func TestUpdateReplicaSet(t *testing.T) {
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for rs %v", rs1.Name)
 	}
-	expectedKey, _ := controller.KeyFunc(d1)
+	expectedKey, _ := cache.ObjectKey(d1)
 	if got, want := key.(string), expectedKey; got != want {
 		t.Errorf("queue.Get() = %v, want %v", got, want)
 	}
@@ -785,7 +786,7 @@ func TestUpdateReplicaSet(t *testing.T) {
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for rs %v", rs2.Name)
 	}
-	expectedKey, _ = controller.KeyFunc(d2)
+	expectedKey, _ = cache.ObjectKey(d2)
 	if got, want := key.(string), expectedKey; got != want {
 		t.Errorf("queue.Get() = %v, want %v", got, want)
 	}
@@ -913,7 +914,7 @@ func TestDeleteReplicaSet(t *testing.T) {
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for rs %v", rs1.Name)
 	}
-	expectedKey, _ := controller.KeyFunc(d1)
+	expectedKey, _ := cache.ObjectKey(d1)
 	if got, want := key.(string), expectedKey; got != want {
 		t.Errorf("queue.Get() = %v, want %v", got, want)
 	}
@@ -926,7 +927,7 @@ func TestDeleteReplicaSet(t *testing.T) {
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for rs %v", rs2.Name)
 	}
-	expectedKey, _ = controller.KeyFunc(d2)
+	expectedKey, _ = cache.ObjectKey(d2)
 	if got, want := key.(string), expectedKey; got != want {
 		t.Errorf("queue.Get() = %v, want %v", got, want)
 	}

@@ -27,7 +27,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	batch "k8s.io/api/batch/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -748,7 +748,7 @@ func TestControllerSyncJob(t *testing.T) {
 				// job & pods setup
 				job := newJob(tc.parallelism, tc.completions, tc.backoffLimit, tc.completionMode)
 				job.Spec.Suspend = pointer.BoolPtr(tc.suspend)
-				key, err := controller.KeyFunc(job)
+				key, err := cache.ObjectKey(job)
 				if err != nil {
 					t.Errorf("Unexpected error getting job key: %v", err)
 				}
@@ -2201,7 +2201,7 @@ func TestAddPod(t *testing.T) {
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for pod %v", pod1.Name)
 	}
-	expectedKey, _ := controller.KeyFunc(job1)
+	expectedKey, _ := cache.ObjectKey(job1)
 	if got, want := key.(string), expectedKey; got != want {
 		t.Errorf("queue.Get() = %v, want %v", got, want)
 	}
@@ -2214,7 +2214,7 @@ func TestAddPod(t *testing.T) {
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for pod %v", pod2.Name)
 	}
-	expectedKey, _ = controller.KeyFunc(job2)
+	expectedKey, _ = cache.ObjectKey(job2)
 	if got, want := key.(string), expectedKey; got != want {
 		t.Errorf("queue.Get() = %v, want %v", got, want)
 	}
@@ -2276,7 +2276,7 @@ func TestUpdatePod(t *testing.T) {
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for pod %v", pod1.Name)
 	}
-	expectedKey, _ := controller.KeyFunc(job1)
+	expectedKey, _ := cache.ObjectKey(job1)
 	if got, want := key.(string), expectedKey; got != want {
 		t.Errorf("queue.Get() = %v, want %v", got, want)
 	}
@@ -2291,7 +2291,7 @@ func TestUpdatePod(t *testing.T) {
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for pod %v", pod2.Name)
 	}
-	expectedKey, _ = controller.KeyFunc(job2)
+	expectedKey, _ = cache.ObjectKey(job2)
 	if got, want := key.(string), expectedKey; got != want {
 		t.Errorf("queue.Get() = %v, want %v", got, want)
 	}
@@ -2402,7 +2402,7 @@ func TestDeletePod(t *testing.T) {
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for pod %v", pod1.Name)
 	}
-	expectedKey, _ := controller.KeyFunc(job1)
+	expectedKey, _ := cache.ObjectKey(job1)
 	if got, want := key.(string), expectedKey; got != want {
 		t.Errorf("queue.Get() = %v, want %v", got, want)
 	}
@@ -2415,7 +2415,7 @@ func TestDeletePod(t *testing.T) {
 	if key == nil || done {
 		t.Fatalf("failed to enqueue controller for pod %v", pod2.Name)
 	}
-	expectedKey, _ = controller.KeyFunc(job2)
+	expectedKey, _ = cache.ObjectKey(job2)
 	if got, want := key.(string), expectedKey; got != want {
 		t.Errorf("queue.Get() = %v, want %v", got, want)
 	}

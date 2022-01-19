@@ -276,7 +276,7 @@ func (f *fakePodControl) CreatePods(ctx context.Context, namespace string, templ
 	f.podIDMap[pod.Name] = pod
 
 	ds := object.(*apps.DaemonSet)
-	dsKey, _ := controller.KeyFunc(ds)
+	dsKey, _ := cache.ObjectKey(ds)
 	f.expectations.CreationObserved(dsKey)
 
 	return nil
@@ -296,7 +296,7 @@ func (f *fakePodControl) DeletePod(ctx context.Context, namespace string, podID 
 	delete(f.podIDMap, podID)
 
 	ds := object.(*apps.DaemonSet)
-	dsKey, _ := controller.KeyFunc(ds)
+	dsKey, _ := cache.ObjectKey(ds)
 	f.expectations.DeletionObserved(dsKey)
 
 	return nil
@@ -391,7 +391,7 @@ func validateSyncDaemonSets(manager *daemonSetsController, fakePodControl *fakeP
 
 func expectSyncDaemonSets(t *testing.T, manager *daemonSetsController, ds *apps.DaemonSet, podControl *fakePodControl, expectedCreates, expectedDeletes int, expectedEvents int) {
 	t.Helper()
-	key, err := controller.KeyFunc(ds)
+	key, err := cache.ObjectKey(ds)
 	if err != nil {
 		t.Fatal("could not get key for daemon")
 	}
@@ -411,7 +411,7 @@ func expectSyncDaemonSets(t *testing.T, manager *daemonSetsController, ds *apps.
 func clearExpectations(t *testing.T, manager *daemonSetsController, ds *apps.DaemonSet, fakePodControl *fakePodControl) {
 	fakePodControl.Clear()
 
-	key, err := controller.KeyFunc(ds)
+	key, err := cache.ObjectKey(ds)
 	if err != nil {
 		t.Errorf("Could not get key for daemon.")
 		return
@@ -571,7 +571,7 @@ func TestExpectationsOnRecreate(t *testing.T) {
 	}
 	fakePodControl.Clear()
 
-	oldDSKey, err := controller.KeyFunc(oldDS)
+	oldDSKey, err := cache.ObjectKey(oldDS)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -642,7 +642,7 @@ func TestExpectationsOnRecreate(t *testing.T) {
 		t.Fatal("Queue is shutting down!")
 	}
 
-	newDSKey, err := controller.KeyFunc(newDS)
+	newDSKey, err := cache.ObjectKey(newDS)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -835,7 +835,7 @@ func TestDaemonSetPodCreateExpectationsError(t *testing.T) {
 
 			expectSyncDaemonSets(t, manager, ds, podControl, podControl.FakePodControl.CreateLimit, 0, 0)
 
-			dsKey, err := controller.KeyFunc(ds)
+			dsKey, err := cache.ObjectKey(ds)
 			if err != nil {
 				t.Fatalf("error get DaemonSets controller key: %v", err)
 			}
@@ -2896,7 +2896,7 @@ func TestAddPod(t *testing.T) {
 			if key == nil || done {
 				t.Fatalf("failed to enqueue controller for pod %v", pod1.Name)
 			}
-			expectedKey, _ := controller.KeyFunc(ds1)
+			expectedKey, _ := cache.ObjectKey(ds1)
 			if got, want := key.(string), expectedKey; got != want {
 				t.Errorf("queue.Get() = %v, want %v", got, want)
 			}
@@ -2910,7 +2910,7 @@ func TestAddPod(t *testing.T) {
 			if key == nil || done {
 				t.Fatalf("failed to enqueue controller for pod %v", pod2.Name)
 			}
-			expectedKey, _ = controller.KeyFunc(ds2)
+			expectedKey, _ = cache.ObjectKey(ds2)
 			if got, want := key.(string), expectedKey; got != want {
 				t.Errorf("queue.Get() = %v, want %v", got, want)
 			}
@@ -2993,7 +2993,7 @@ func TestUpdatePod(t *testing.T) {
 			if key == nil || done {
 				t.Fatalf("failed to enqueue controller for pod %v", pod1.Name)
 			}
-			expectedKey, _ := controller.KeyFunc(ds1)
+			expectedKey, _ := cache.ObjectKey(ds1)
 			if got, want := key.(string), expectedKey; got != want {
 				t.Errorf("queue.Get() = %v, want %v", got, want)
 			}
@@ -3009,7 +3009,7 @@ func TestUpdatePod(t *testing.T) {
 			if key == nil || done {
 				t.Fatalf("failed to enqueue controller for pod %v", pod2.Name)
 			}
-			expectedKey, _ = controller.KeyFunc(ds2)
+			expectedKey, _ = cache.ObjectKey(ds2)
 			if got, want := key.(string), expectedKey; got != want {
 				t.Errorf("queue.Get() = %v, want %v", got, want)
 			}
@@ -3186,7 +3186,7 @@ func TestDeletePod(t *testing.T) {
 			if key == nil || done {
 				t.Fatalf("failed to enqueue controller for pod %v", pod1.Name)
 			}
-			expectedKey, _ := controller.KeyFunc(ds1)
+			expectedKey, _ := cache.ObjectKey(ds1)
 			if got, want := key.(string), expectedKey; got != want {
 				t.Errorf("queue.Get() = %v, want %v", got, want)
 			}
@@ -3200,7 +3200,7 @@ func TestDeletePod(t *testing.T) {
 			if key == nil || done {
 				t.Fatalf("failed to enqueue controller for pod %v", pod2.Name)
 			}
-			expectedKey, _ = controller.KeyFunc(ds2)
+			expectedKey, _ = cache.ObjectKey(ds2)
 			if got, want := key.(string), expectedKey; got != want {
 				t.Errorf("queue.Get() = %v, want %v", got, want)
 			}

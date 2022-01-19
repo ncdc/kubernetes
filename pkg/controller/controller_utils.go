@@ -99,7 +99,6 @@ var UpdateLabelBackoff = wait.Backoff{
 }
 
 var (
-	KeyFunc           = cache.DeletionHandlingMetaNamespaceKeyFunc
 	podPhaseToOrdinal = map[v1.PodPhase]int{v1.PodPending: 0, v1.PodUnknown: 1, v1.PodRunning: 2}
 )
 

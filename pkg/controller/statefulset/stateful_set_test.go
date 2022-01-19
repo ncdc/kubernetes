@@ -293,7 +293,7 @@ func TestStatefulSetControllerAddPod(t *testing.T) {
 		t.Error("failed to enqueue StatefulSet")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(set1); expectedKey != key {
+	} else if expectedKey, _ := cache.ObjectKey(set1); expectedKey != key {
 		t.Errorf("expected StatefulSet key %s found %s", expectedKey, key)
 	}
 	ssc.queue.Done(key)
@@ -304,7 +304,7 @@ func TestStatefulSetControllerAddPod(t *testing.T) {
 		t.Error("failed to enqueue StatefulSet")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(set2); expectedKey != key {
+	} else if expectedKey, _ := cache.ObjectKey(set2); expectedKey != key {
 		t.Errorf("expected StatefulSet key %s found %s", expectedKey, key)
 	}
 	ssc.queue.Done(key)
@@ -361,7 +361,7 @@ func TestStatefulSetControllerUpdatePod(t *testing.T) {
 		t.Error("failed to enqueue StatefulSet")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(set1); expectedKey != key {
+	} else if expectedKey, _ := cache.ObjectKey(set1); expectedKey != key {
 		t.Errorf("expected StatefulSet key %s found %s", expectedKey, key)
 	}
 
@@ -373,7 +373,7 @@ func TestStatefulSetControllerUpdatePod(t *testing.T) {
 		t.Error("failed to enqueue StatefulSet")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(set2); expectedKey != key {
+	} else if expectedKey, _ := cache.ObjectKey(set2); expectedKey != key {
 		t.Errorf("expected StatefulSet key %s found %s", expectedKey, key)
 	}
 }
@@ -474,7 +474,7 @@ func TestStatefulSetControllerDeletePod(t *testing.T) {
 		t.Error("failed to enqueue StatefulSet")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(set1); expectedKey != key {
+	} else if expectedKey, _ := cache.ObjectKey(set1); expectedKey != key {
 		t.Errorf("expected StatefulSet key %s found %s", expectedKey, key)
 	}
 
@@ -484,7 +484,7 @@ func TestStatefulSetControllerDeletePod(t *testing.T) {
 		t.Error("failed to enqueue StatefulSet")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(set2); expectedKey != key {
+	} else if expectedKey, _ := cache.ObjectKey(set2); expectedKey != key {
 		t.Errorf("expected StatefulSet key %s found %s", expectedKey, key)
 	}
 }
@@ -510,7 +510,7 @@ func TestStatefulSetControllerDeletePodTombstone(t *testing.T) {
 	set := newStatefulSet(3)
 	pod := newStatefulSetPod(set, 0)
 	om.setsIndexer.Add(set)
-	tombstoneKey, _ := controller.KeyFunc(pod)
+	tombstoneKey, _ := cache.ObjectKey(pod)
 	tombstone := cache.DeletedFinalStateUnknown{Key: tombstoneKey, Obj: pod}
 	ssc.deletePod(tombstone)
 	key, done := ssc.queue.Get()
@@ -518,7 +518,7 @@ func TestStatefulSetControllerDeletePodTombstone(t *testing.T) {
 		t.Error("failed to enqueue StatefulSet")
 	} else if key, ok := key.(string); !ok {
 		t.Error("key is not a string")
-	} else if expectedKey, _ := controller.KeyFunc(set); expectedKey != key {
+	} else if expectedKey, _ := cache.ObjectKey(set); expectedKey != key {
 		t.Errorf("expected StatefulSet key %s found %s", expectedKey, key)
 	}
 }

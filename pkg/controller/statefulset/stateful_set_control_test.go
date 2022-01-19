@@ -1875,7 +1875,7 @@ func (om *fakeObjectManager) DeletePod(pod *v1.Pod) error {
 		defer om.deletePodTracker.reset()
 		return om.deletePodTracker.err
 	}
-	if key, err := controller.KeyFunc(pod); err != nil {
+	if key, err := cache.ObjectKey(pod); err != nil {
 		return err
 	} else if obj, found, err := om.podsIndexer.GetByKey(key); err != nil {
 		return err

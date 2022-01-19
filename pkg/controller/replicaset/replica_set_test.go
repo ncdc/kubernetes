@@ -342,7 +342,7 @@ func TestSyncReplicaSetDormancy(t *testing.T) {
 	}
 
 	// Get the key for the controller
-	rsKey, err := controller.KeyFunc(rsSpec)
+	rsKey, err := cache.ObjectKey(rsSpec)
 	if err != nil {
 		t.Errorf("Couldn't get key for object %#v: %v", rsSpec, err)
 	}
@@ -897,7 +897,7 @@ func doTestControllerBurstReplicas(t *testing.T, burstReplicas, numReplicas int)
 	expectedPods := int32(0)
 	pods := newPodList(nil, numReplicas, v1.PodPending, labelMap, rsSpec, "pod")
 
-	rsKey, err := controller.KeyFunc(rsSpec)
+	rsKey, err := cache.ObjectKey(rsSpec)
 	if err != nil {
 		t.Errorf("Couldn't get key for object %#v: %v", rsSpec, err)
 	}
@@ -1103,7 +1103,7 @@ func TestDeleteControllerAndExpectations(t *testing.T) {
 	fakePodControl.Clear()
 
 	// Get the ReplicaSet key
-	rsKey, err := controller.KeyFunc(rs)
+	rsKey, err := cache.ObjectKey(rs)
 	if err != nil {
 		t.Errorf("Couldn't get key for object %#v: %v", rs, err)
 	}
@@ -1182,7 +1182,7 @@ func TestExpectationsOnRecreate(t *testing.T) {
 	}
 	fakePodControl.Clear()
 
-	oldRSKey, err := controller.KeyFunc(oldRS)
+	oldRSKey, err := cache.ObjectKey(oldRS)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1262,7 +1262,7 @@ func TestExpectationsOnRecreate(t *testing.T) {
 		t.Fatal("Queue is shutting down!")
 	}
 
-	newRSKey, err := controller.KeyFunc(newRS)
+	newRSKey, err := cache.ObjectKey(newRS)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1347,7 +1347,7 @@ func TestDeletionTimestamp(t *testing.T) {
 
 	rs := newReplicaSet(1, labelMap)
 	informers.Apps().V1().ReplicaSets().Informer().GetIndexer().Add(rs)
-	rsKey, err := controller.KeyFunc(rs)
+	rsKey, err := cache.ObjectKey(rs)
 	if err != nil {
 		t.Errorf("Couldn't get key for object %#v: %v", rs, err)
 	}

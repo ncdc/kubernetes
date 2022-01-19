@@ -52,7 +52,6 @@ import (
 	pdbhelper "k8s.io/component-helpers/apps/poddisruptionbudget"
 	"k8s.io/klog/v2"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
-	"k8s.io/kubernetes/pkg/controller"
 )
 
 // DeletionTimeout sets maximum time from the moment a pod is added to DisruptedPods in PDB.Status
@@ -464,7 +463,7 @@ func (dc *DisruptionController) deletePod(obj interface{}) {
 }
 
 func (dc *DisruptionController) enqueuePdb(pdb *policy.PodDisruptionBudget) {
-	key, err := controller.KeyFunc(pdb)
+	key, err := cache.ObjectKey(pdb)
 	if err != nil {
 		klog.Errorf("Couldn't get key for PodDisruptionBudget object %+v: %v", pdb, err)
 		return
@@ -473,7 +472,7 @@ func (dc *DisruptionController) enqueuePdb(pdb *policy.PodDisruptionBudget) {
 }
 
 func (dc *DisruptionController) enqueuePdbForRecheck(pdb *policy.PodDisruptionBudget, delay time.Duration) {
-	key, err := controller.KeyFunc(pdb)
+	key, err := cache.ObjectKey(pdb)
 	if err != nil {
 		klog.Errorf("Couldn't get key for PodDisruptionBudget object %+v: %v", pdb, err)
 		return

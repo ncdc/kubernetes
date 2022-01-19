@@ -46,7 +46,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/component-base/metrics/prometheus/ratelimiter"
 	"k8s.io/klog/v2"
-	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/cronjob/metrics"
 )
 
@@ -341,7 +340,7 @@ func (jm *ControllerV2) deleteJob(obj interface{}) {
 }
 
 func (jm *ControllerV2) enqueueController(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %+v: %v", obj, err))
 		return
@@ -351,7 +350,7 @@ func (jm *ControllerV2) enqueueController(obj interface{}) {
 }
 
 func (jm *ControllerV2) enqueueControllerAfter(obj interface{}, t time.Duration) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %+v: %v", obj, err))
 		return

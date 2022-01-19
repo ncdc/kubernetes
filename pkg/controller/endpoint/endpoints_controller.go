@@ -45,7 +45,6 @@ import (
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
-	"k8s.io/kubernetes/pkg/controller"
 	endpointutil "k8s.io/kubernetes/pkg/controller/util/endpoint"
 	utillabels "k8s.io/kubernetes/pkg/util/labels"
 	utilnet "k8s.io/utils/net"
@@ -300,7 +299,7 @@ func (e *Controller) deletePod(obj interface{}) {
 
 // onServiceUpdate updates the Service Selector in the cache and queues the Service for processing.
 func (e *Controller) onServiceUpdate(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Couldn't get key for object %+v: %v", obj, err))
 		return
@@ -312,7 +311,7 @@ func (e *Controller) onServiceUpdate(obj interface{}) {
 
 // onServiceDelete removes the Service Selector from the cache and queues the Service for processing.
 func (e *Controller) onServiceDelete(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Couldn't get key for object %+v: %v", obj, err))
 		return
@@ -323,7 +322,7 @@ func (e *Controller) onServiceDelete(obj interface{}) {
 }
 
 func (e *Controller) onEndpointsDelete(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Couldn't get key for object %+v: %v", obj, err))
 		return
@@ -604,7 +603,7 @@ func (e *Controller) checkLeftoverEndpoints() {
 			// as leader-election only have endpoints without service
 			continue
 		}
-		key, err := controller.KeyFunc(ep)
+		key, err := cache.ObjectKey(ep)
 		if err != nil {
 			utilruntime.HandleError(fmt.Errorf("Unable to get key for endpoint %#v", ep))
 			continue

@@ -27,7 +27,7 @@ import (
 	"time"
 
 	batch "k8s.io/api/batch/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -254,7 +254,7 @@ func (jm *Controller) addPod(obj interface{}) {
 		if job == nil {
 			return
 		}
-		jobKey, err := controller.KeyFunc(job)
+		jobKey, err := cache.ObjectKey(job)
 		if err != nil {
 			return
 		}
@@ -308,7 +308,7 @@ func (jm *Controller) updatePod(old, cur interface{}) {
 		// The ControllerRef was changed. Sync the old controller, if any.
 		if job := jm.resolveControllerRef(oldPod.Namespace, oldControllerRef); job != nil {
 			if finalizerRemoved {
-				key, err := controller.KeyFunc(job)
+				key, err := cache.ObjectKey(job)
 				if err == nil {
 					jm.finalizerExpectations.finalizerRemovalObserved(key, string(curPod.UID))
 				}
@@ -324,7 +324,7 @@ func (jm *Controller) updatePod(old, cur interface{}) {
 			return
 		}
 		if finalizerRemoved {
-			key, err := controller.KeyFunc(job)
+			key, err := cache.ObjectKey(job)
 			if err == nil {
 				jm.finalizerExpectations.finalizerRemovalObserved(key, string(curPod.UID))
 			}
@@ -377,7 +377,7 @@ func (jm *Controller) deletePod(obj interface{}, final bool) {
 		}
 		return
 	}
-	jobKey, err := controller.KeyFunc(job)
+	jobKey, err := cache.ObjectKey(job)
 	if err != nil {
 		return
 	}
@@ -397,7 +397,7 @@ func (jm *Controller) updateJob(old, cur interface{}) {
 	curJob := cur.(*batch.Job)
 
 	// never return error
-	key, err := controller.KeyFunc(curJob)
+	key, err := cache.ObjectKey(curJob)
 	if err != nil {
 		return
 	}
@@ -433,7 +433,7 @@ func (jm *Controller) enqueueControllerPodUpdate(obj interface{}, immediate bool
 }
 
 func (jm *Controller) enqueueControllerDelayed(obj interface{}, immediate bool, delay time.Duration) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Couldn't get key for object %+v: %v", obj, err))
 		return
@@ -455,7 +455,7 @@ func (jm *Controller) enqueueControllerDelayed(obj interface{}, immediate bool, 
 }
 
 func (jm *Controller) enqueueOrphanPod(obj *v1.Pod) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %+v: %v", obj, err))
 		return
@@ -1048,7 +1048,7 @@ func (jm *Controller) flushUncountedAndRemoveFinalizers(ctx context.Context, job
 		*oldCounters = job.Status
 		needsFlush = false
 	}
-	jobKey, err := controller.KeyFunc(job)
+	jobKey, err := cache.ObjectKey(job)
 	if err != nil {
 		return job, needsFlush, fmt.Errorf("getting job key: %w", err)
 	}
@@ -1266,7 +1266,7 @@ func jobSuspended(job *batch.Job) bool {
 func (jm *Controller) manageJob(ctx context.Context, job *batch.Job, activePods []*v1.Pod, succeeded int32, succeededIndexes []interval) (int32, string, error) {
 	active := int32(len(activePods))
 	parallelism := *job.Spec.Parallelism
-	jobKey, err := controller.KeyFunc(job)
+	jobKey, err := cache.ObjectKey(job)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Couldn't get key for job %#v: %v", job, err))
 		return 0, metrics.JobSyncActionTracking, nil

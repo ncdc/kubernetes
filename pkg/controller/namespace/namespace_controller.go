@@ -34,7 +34,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/component-base/metrics/prometheus/ratelimiter"
-	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/namespace/deletion"
 
 	"k8s.io/klog/v2"
@@ -116,7 +115,7 @@ func nsControllerRateLimiter() workqueue.RateLimiter {
 // enqueueNamespace adds an object to the controller work queue
 // obj could be an *v1.Namespace, or a DeletionFinalStateUnknown item.
 func (nm *NamespaceController) enqueueNamespace(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+	key, err := cache.ObjectKey(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Couldn't get key for object %+v: %v", obj, err))
 		return
