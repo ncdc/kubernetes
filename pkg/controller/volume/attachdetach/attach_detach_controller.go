@@ -584,7 +584,7 @@ func (adc *attachDetachController) nodeDelete(obj interface{}) {
 }
 
 func (adc *attachDetachController) enqueuePVC(obj interface{}) {
-	key, err := kcache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	key, err := kcache.DeletionHandlingObjectKeyFunc(obj)
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("Couldn't get key for object %+v: %v", obj, err))
 		return

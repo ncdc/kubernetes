@@ -297,7 +297,7 @@ func TestAPIs(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+		indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 		handler := &apisHandler{
 			codecs:         aggregatorscheme.Codecs,
 			lister:         listers.NewAPIServiceLister(indexer),
@@ -334,7 +334,7 @@ func TestAPIs(t *testing.T) {
 }
 
 func TestAPIGroupMissing(t *testing.T) {
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	handler := &apiGroupHandler{
 		codecs:    aggregatorscheme.Codecs,
 		lister:    listers.NewAPIServiceLister(indexer),
@@ -479,7 +479,7 @@ func TestAPIGroup(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+		indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 		handler := &apiGroupHandler{
 			codecs:    aggregatorscheme.Codecs,
 			lister:    listers.NewAPIServiceLister(indexer),

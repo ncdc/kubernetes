@@ -278,7 +278,7 @@ func TestWriteClientCAs(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			client := fake.NewSimpleClientset(test.preexistingObjs...)
-			configMapIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+			configMapIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 			for _, obj := range test.preexistingObjs {
 				configMapIndexer.Add(obj)
 			}

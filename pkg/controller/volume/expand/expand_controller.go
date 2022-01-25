@@ -182,7 +182,7 @@ func (expc *expandController) enqueuePVC(obj interface{}) {
 	}
 
 	if pvc.Status.Phase == v1.ClaimBound {
-		key, err := kcache.DeletionHandlingMetaNamespaceKeyFunc(pvc)
+		key, err := kcache.DeletionHandlingObjectKeyFunc(pvc)
 		if err != nil {
 			runtime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", pvc, err))
 			return

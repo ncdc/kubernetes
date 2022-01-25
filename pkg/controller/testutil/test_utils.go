@@ -51,7 +51,7 @@ import (
 )
 
 var (
-	keyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
+	keyFunc = cache.DeletionHandlingObjectKeyFunc
 )
 
 // FakeNodeHandler is a fake implementation of NodesInterface and NodeInterface. It

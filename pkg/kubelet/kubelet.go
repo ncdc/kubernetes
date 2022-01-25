@@ -416,7 +416,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		klog.InfoS("Attempting to sync node with API server")
 	} else {
 		// we don't have a client to sync!
-		nodeIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+		nodeIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{})
 		nodeLister = corelisters.NewNodeLister(nodeIndexer)
 		nodeHasSynced = func() bool { return true }
 		klog.InfoS("Kubelet is running in standalone mode, will skip API server sync")
@@ -471,7 +471,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		serviceHasSynced = kubeInformers.Core().V1().Services().Informer().HasSynced
 		kubeInformers.Start(wait.NeverStop)
 	} else {
-		serviceIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+		serviceIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 		serviceLister = corelisters.NewServiceLister(serviceIndexer)
 		serviceHasSynced = func() bool { return true }
 	}

@@ -1352,7 +1352,7 @@ func TestPodToEndpointAddressForService(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			podStore := cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)
+			podStore := cache.NewStore(cache.DeletionHandlingObjectKeyFunc)
 			ns := "test"
 			addPods(podStore, ns, 1, 1, 0, tc.ipFamilies)
 			pods := podStore.List()

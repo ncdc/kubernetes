@@ -186,9 +186,9 @@ func TestPodDeletionWithDswp(t *testing.T) {
 	defer close(stopCh)
 
 	waitToObservePods(t, podInformer, 1)
-	podKey, err := cache.MetaNamespaceKeyFunc(pod)
+	podKey, err := cache.ObjectKey(pod)
 	if err != nil {
-		t.Fatalf("MetaNamespaceKeyFunc failed with : %v", err)
+		t.Fatalf("ObjectKey failed with : %v", err)
 	}
 
 	podInformerObj, _, err := podInformer.GetStore().GetByKey(podKey)
@@ -261,9 +261,9 @@ func TestPodUpdateWithWithADC(t *testing.T) {
 	go ctrl.Run(stopCh)
 
 	waitToObservePods(t, podInformer, 1)
-	podKey, err := cache.MetaNamespaceKeyFunc(pod)
+	podKey, err := cache.ObjectKey(pod)
 	if err != nil {
-		t.Fatalf("MetaNamespaceKeyFunc failed with : %v", err)
+		t.Fatalf("ObjectKey failed with : %v", err)
 	}
 
 	_, _, err = podInformer.GetStore().GetByKey(podKey)
@@ -331,9 +331,9 @@ func TestPodUpdateWithKeepTerminatedPodVolumes(t *testing.T) {
 	go ctrl.Run(stopCh)
 
 	waitToObservePods(t, podInformer, 1)
-	podKey, err := cache.MetaNamespaceKeyFunc(pod)
+	podKey, err := cache.ObjectKey(pod)
 	if err != nil {
-		t.Fatalf("MetaNamespaceKeyFunc failed with : %v", err)
+		t.Fatalf("ObjectKey failed with : %v", err)
 	}
 
 	_, _, err = podInformer.GetStore().GetByKey(podKey)
@@ -514,9 +514,9 @@ func TestPodAddedByDswp(t *testing.T) {
 	go ctrl.Run(stopCh)
 
 	waitToObservePods(t, podInformer, 1)
-	podKey, err := cache.MetaNamespaceKeyFunc(pod)
+	podKey, err := cache.ObjectKey(pod)
 	if err != nil {
-		t.Fatalf("MetaNamespaceKeyFunc failed with : %v", err)
+		t.Fatalf("ObjectKey failed with : %v", err)
 	}
 
 	_, _, err = podInformer.GetStore().GetByKey(podKey)

@@ -53,7 +53,7 @@ func (t *testLW) Watch(options metav1.ListOptions) (watch.Interface, error) {
 }
 
 func TestCloseWatchChannelOnError(t *testing.T) {
-	r := NewReflector(&testLW{}, &v1.Pod{}, NewStore(MetaNamespaceKeyFunc), 0)
+	r := NewReflector(&testLW{}, &v1.Pod{}, NewStore(ObjectKey), 0)
 	pod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "bar"}}
 	fw := watch.NewFake()
 	r.listerWatcher = &testLW{
@@ -79,7 +79,7 @@ func TestCloseWatchChannelOnError(t *testing.T) {
 
 func TestRunUntil(t *testing.T) {
 	stopCh := make(chan struct{})
-	store := NewStore(MetaNamespaceKeyFunc)
+	store := NewStore(ObjectKey)
 	r := NewReflector(&testLW{}, &v1.Pod{}, store, 0)
 	fw := watch.NewFake()
 	r.listerWatcher = &testLW{
@@ -107,7 +107,7 @@ func TestRunUntil(t *testing.T) {
 }
 
 func TestReflectorResyncChan(t *testing.T) {
-	s := NewStore(MetaNamespaceKeyFunc)
+	s := NewStore(ObjectKey)
 	g := NewReflector(&testLW{}, &v1.Pod{}, s, time.Millisecond)
 	a, _ := g.resyncChan()
 	b := time.After(wait.ForeverTestTimeout)
@@ -120,7 +120,7 @@ func TestReflectorResyncChan(t *testing.T) {
 }
 
 func BenchmarkReflectorResyncChanMany(b *testing.B) {
-	s := NewStore(MetaNamespaceKeyFunc)
+	s := NewStore(ObjectKey)
 	g := NewReflector(&testLW{}, &v1.Pod{}, s, 25*time.Millisecond)
 	// The improvement to this (calling the timer's Stop() method) makes
 	// this benchmark about 40% faster.
@@ -132,7 +132,7 @@ func BenchmarkReflectorResyncChanMany(b *testing.B) {
 }
 
 func TestReflectorWatchHandlerError(t *testing.T) {
-	s := NewStore(MetaNamespaceKeyFunc)
+	s := NewStore(ObjectKey)
 	g := NewReflector(&testLW{}, &v1.Pod{}, s, 0)
 	fw := watch.NewFake()
 	go func() {
@@ -146,7 +146,7 @@ func TestReflectorWatchHandlerError(t *testing.T) {
 }
 
 func TestReflectorWatchHandler(t *testing.T) {
-	s := NewStore(MetaNamespaceKeyFunc)
+	s := NewStore(ObjectKey)
 	g := NewReflector(&testLW{}, &v1.Pod{}, s, 0)
 	fw := watch.NewFake()
 	s.Add(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}})
@@ -202,7 +202,7 @@ func TestReflectorWatchHandler(t *testing.T) {
 }
 
 func TestReflectorStopWatch(t *testing.T) {
-	s := NewStore(MetaNamespaceKeyFunc)
+	s := NewStore(ObjectKey)
 	g := NewReflector(&testLW{}, &v1.Pod{}, s, 0)
 	fw := watch.NewFake()
 	var resumeRV string
@@ -238,7 +238,7 @@ func TestReflectorListAndWatch(t *testing.T) {
 			return &v1.PodList{ListMeta: metav1.ListMeta{ResourceVersion: "1"}}, nil
 		},
 	}
-	s := NewFIFO(MetaNamespaceKeyFunc)
+	s := NewFIFO(ObjectKey)
 	r := NewReflector(lw, &v1.Pod{}, s, 0)
 	go r.ListAndWatch(wait.NeverStop)
 
@@ -317,7 +317,7 @@ func TestReflectorListAndWatchWithErrors(t *testing.T) {
 		},
 	}
 
-	s := NewFIFO(MetaNamespaceKeyFunc)
+	s := NewFIFO(ObjectKey)
 	for line, item := range table {
 		if item.list != nil {
 			// Test that the list is what currently exists in the store.
@@ -416,7 +416,7 @@ func TestReflectorListAndWatchInitConnBackoff(t *testing.T) {
 				r := &Reflector{
 					name:                   "test-reflector",
 					listerWatcher:          lw,
-					store:                  NewFIFO(MetaNamespaceKeyFunc),
+					store:                  NewFIFO(ObjectKey),
 					initConnBackoffManager: bm,
 					clock:                  fakeClock,
 					watchErrorHandler:      WatchErrorHandler(DefaultWatchErrorHandler),
@@ -476,7 +476,7 @@ func TestBackoffOnTooManyRequests(t *testing.T) {
 	r := &Reflector{
 		name:                   "test-reflector",
 		listerWatcher:          lw,
-		store:                  NewFIFO(MetaNamespaceKeyFunc),
+		store:                  NewFIFO(ObjectKey),
 		initConnBackoffManager: bm,
 		clock:                  clock,
 		watchErrorHandler:      WatchErrorHandler(DefaultWatchErrorHandler),
@@ -526,7 +526,7 @@ func TestReflectorResync(t *testing.T) {
 
 func TestReflectorWatchListPageSize(t *testing.T) {
 	stopCh := make(chan struct{})
-	s := NewStore(MetaNamespaceKeyFunc)
+	s := NewStore(ObjectKey)
 
 	lw := &testLW{
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
@@ -571,7 +571,7 @@ func TestReflectorWatchListPageSize(t *testing.T) {
 
 func TestReflectorNotPaginatingNotConsistentReads(t *testing.T) {
 	stopCh := make(chan struct{})
-	s := NewStore(MetaNamespaceKeyFunc)
+	s := NewStore(ObjectKey)
 
 	lw := &testLW{
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
@@ -606,7 +606,7 @@ func TestReflectorNotPaginatingNotConsistentReads(t *testing.T) {
 
 func TestReflectorPaginatingNonConsistentReadsIfWatchCacheDisabled(t *testing.T) {
 	var stopCh chan struct{}
-	s := NewStore(MetaNamespaceKeyFunc)
+	s := NewStore(ObjectKey)
 
 	lw := &testLW{
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
@@ -660,7 +660,7 @@ func TestReflectorPaginatingNonConsistentReadsIfWatchCacheDisabled(t *testing.T)
 // etcd that is partitioned and serving older data than the reflector has already processed.
 func TestReflectorResyncWithResourceVersion(t *testing.T) {
 	stopCh := make(chan struct{})
-	s := NewStore(MetaNamespaceKeyFunc)
+	s := NewStore(ObjectKey)
 	listCallRVs := []string{}
 
 	lw := &testLW{
@@ -719,7 +719,7 @@ func TestReflectorResyncWithResourceVersion(t *testing.T) {
 // the requested ResourceVersion).
 func TestReflectorExpiredExactResourceVersion(t *testing.T) {
 	stopCh := make(chan struct{})
-	s := NewStore(MetaNamespaceKeyFunc)
+	s := NewStore(ObjectKey)
 	listCallRVs := []string{}
 
 	lw := &testLW{
@@ -776,7 +776,7 @@ func TestReflectorExpiredExactResourceVersion(t *testing.T) {
 
 func TestReflectorFullListIfExpired(t *testing.T) {
 	stopCh := make(chan struct{})
-	s := NewStore(MetaNamespaceKeyFunc)
+	s := NewStore(ObjectKey)
 	listCallRVs := []string{}
 
 	lw := &testLW{
@@ -848,7 +848,7 @@ func TestReflectorFullListIfExpired(t *testing.T) {
 
 func TestReflectorFullListIfTooLarge(t *testing.T) {
 	stopCh := make(chan struct{})
-	s := NewStore(MetaNamespaceKeyFunc)
+	s := NewStore(ObjectKey)
 	listCallRVs := []string{}
 
 	lw := &testLW{
@@ -978,7 +978,7 @@ func (s *storeWithRV) UpdateResourceVersion(resourceVersion string) {
 
 func newStoreWithRV() *storeWithRV {
 	return &storeWithRV{
-		Store: NewStore(MetaNamespaceKeyFunc),
+		Store: NewStore(ObjectKey),
 	}
 }
 

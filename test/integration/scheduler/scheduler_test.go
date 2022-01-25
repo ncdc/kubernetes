@@ -76,7 +76,7 @@ func TestUnschedulableNodes(t *testing.T) {
 			Conditions: []v1.NodeCondition{goodCondition},
 		},
 	}
-	nodeKey, err := cache.MetaNamespaceKeyFunc(node)
+	nodeKey, err := cache.ObjectKey(node)
 	if err != nil {
 		t.Fatalf("Couldn't retrieve key for node %v", node.Name)
 	}

@@ -213,7 +213,7 @@ func makePod(name, namespace string, uid types.UID, volumes ...v1.Volume) *v1.Po
 }
 
 func podKey(pod *v1.Pod) string {
-	key, _ := kcache.DeletionHandlingMetaNamespaceKeyFunc(testPodWithEphemeral)
+	key, _ := kcache.DeletionHandlingObjectKeyFunc(testPodWithEphemeral)
 	return key
 }
 

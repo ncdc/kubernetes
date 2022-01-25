@@ -18,8 +18,9 @@ package headerrequest
 
 import (
 	"encoding/json"
-	"k8s.io/apimachinery/pkg/api/equality"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/api/equality"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -86,7 +87,7 @@ func TestRequestHeaderAuthRequestController(t *testing.T) {
 	for _, scenario := range scenarios {
 		t.Run(scenario.name, func(t *testing.T) {
 			// test data
-			indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+			indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{})
 			if err := indexer.Add(scenario.cm); err != nil {
 				t.Fatal(err.Error())
 			}
@@ -171,7 +172,7 @@ func TestRequestHeaderAuthRequestControllerPreserveState(t *testing.T) {
 		t.Run(scenario.name, func(t *testing.T) {
 			// test data
 			if scenario.cm != nil {
-				indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+				indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{})
 				if err := indexer.Add(scenario.cm); err != nil {
 					t.Fatal(err.Error())
 				}

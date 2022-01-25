@@ -379,7 +379,7 @@ func (fh *fakeHistory) ListControllerRevisions(parent metav1.Object, selector la
 }
 
 func (fh *fakeHistory) addRevision(revision *apps.ControllerRevision) (*apps.ControllerRevision, error) {
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(revision)
+	key, err := cache.DeletionHandlingObjectKeyFunc(revision)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +418,7 @@ func (fh *fakeHistory) CreateControllerRevision(parent metav1.Object, revision *
 }
 
 func (fh *fakeHistory) DeleteControllerRevision(revision *apps.ControllerRevision) error {
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(revision)
+	key, err := cache.DeletionHandlingObjectKeyFunc(revision)
 	if err != nil {
 		return err
 	}
@@ -442,7 +442,7 @@ func (fh *fakeHistory) AdoptControllerRevision(parent metav1.Object, parentKind 
 	if owner := metav1.GetControllerOf(revision); owner != nil {
 		return nil, fmt.Errorf("attempt to adopt revision owned by %v", owner)
 	}
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(revision)
+	key, err := cache.DeletionHandlingObjectKeyFunc(revision)
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +459,7 @@ func (fh *fakeHistory) AdoptControllerRevision(parent metav1.Object, parentKind 
 }
 
 func (fh *fakeHistory) ReleaseControllerRevision(parent metav1.Object, revision *apps.ControllerRevision) (*apps.ControllerRevision, error) {
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(revision)
+	key, err := cache.DeletionHandlingObjectKeyFunc(revision)
 	if err != nil {
 		return nil, err
 	}

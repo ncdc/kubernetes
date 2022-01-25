@@ -332,7 +332,7 @@ func (c *NamingConditionController) processNextWorkItem() bool {
 }
 
 func (c *NamingConditionController) enqueue(obj *apiextensionsv1.CustomResourceDefinition) {
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	key, err := cache.DeletionHandlingObjectKeyFunc(obj)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", obj, err))
 		return
@@ -373,7 +373,7 @@ func (c *NamingConditionController) deleteCustomResourceDefinition(obj interface
 
 func (c *NamingConditionController) requeueAllOtherGroupCRDs(name string) error {
 	// HACK(kcp): name is a key from the shared informer's cache. With the changes we've
-	// made to cache.MetaNamespaceKeyFunc to encode the cluster name as part of the key,
+	// made to cache.ObjectKey to encode the cluster name as part of the key,
 	// we have to decode it here (into "cluster name" and "name") so we can make sure to
 	// re-encode the key correctly down below when adding to the work queue.
 	clusterName, name := clusters.SplitClusterAwareKey(name)

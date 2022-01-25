@@ -114,9 +114,9 @@ func (dswp *desiredStateOfWorldPopulator) populatorLoopFunc() func() {
 // longer exist in the informer
 func (dswp *desiredStateOfWorldPopulator) findAndRemoveDeletedPods() {
 	for dswPodUID, dswPodToAdd := range dswp.desiredStateOfWorld.GetPodToAdd() {
-		dswPodKey, err := kcache.MetaNamespaceKeyFunc(dswPodToAdd.Pod)
+		dswPodKey, err := kcache.ObjectKey(dswPodToAdd.Pod)
 		if err != nil {
-			klog.Errorf("MetaNamespaceKeyFunc failed for pod %q (UID %q) with: %v", dswPodKey, dswPodUID, err)
+			klog.Errorf("ObjectKey failed for pod %q (UID %q) with: %v", dswPodKey, dswPodUID, err)
 			continue
 		}
 

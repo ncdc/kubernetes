@@ -355,13 +355,13 @@ func Test_nodePlugin_Admit(t *testing.T) {
 			},
 		}
 
-		existingNodesIndex = cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil)
+		existingNodesIndex = cache.NewIndexer(cache.ObjectKey, nil)
 		existingNodes      = corev1lister.NewNodeLister(existingNodesIndex)
 
-		noExistingPodsIndex = cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil)
+		noExistingPodsIndex = cache.NewIndexer(cache.ObjectKey, nil)
 		noExistingPods      = corev1lister.NewPodLister(noExistingPodsIndex)
 
-		existingPodsIndex = cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil)
+		existingPodsIndex = cache.NewIndexer(cache.ObjectKey, nil)
 		existingPods      = corev1lister.NewPodLister(existingPodsIndex)
 
 		labelsA = map[string]string{
@@ -1235,18 +1235,18 @@ func Test_nodePlugin_Admit(t *testing.T) {
 }
 
 func Test_nodePlugin_Admit_OwnerReference(t *testing.T) {
-	expectedNodeIndex := cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil)
+	expectedNodeIndex := cache.NewIndexer(cache.ObjectKey, nil)
 	expectedNodeIndex.Add(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "mynode", UID: "mynode-uid"}})
 	expectedNode := corev1lister.NewNodeLister(expectedNodeIndex)
 
-	unexpectedNodeIndex := cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil)
+	unexpectedNodeIndex := cache.NewIndexer(cache.ObjectKey, nil)
 	unexpectedNodeIndex.Add(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "mynode", UID: "mynode-unexpected-uid"}})
 	unexpectedNode := corev1lister.NewNodeLister(unexpectedNodeIndex)
 
-	noNodesIndex := cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil)
+	noNodesIndex := cache.NewIndexer(cache.ObjectKey, nil)
 	noNodes := corev1lister.NewNodeLister(noNodesIndex)
 
-	noExistingPodsIndex := cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil)
+	noExistingPodsIndex := cache.NewIndexer(cache.ObjectKey, nil)
 	noExistingPods := corev1lister.NewPodLister(noExistingPodsIndex)
 
 	mynode := &user.DefaultInfo{Name: "system:node:mynode", Groups: []string{"system:nodes"}}

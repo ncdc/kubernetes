@@ -95,7 +95,7 @@ func TestHandleVersionUpdate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			registration := &fakeAPIServiceRegistration{}
-			crdCache := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+			crdCache := cache.NewIndexer(cache.DeletionHandlingObjectKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 			crdLister := crdlisters.NewCustomResourceDefinitionLister(crdCache)
 			c := crdRegistrationController{
 				crdLister:              crdLister,

@@ -130,7 +130,7 @@ func (ec *ephemeralController) enqueuePod(obj interface{}) {
 	for _, vol := range pod.Spec.Volumes {
 		if vol.Ephemeral != nil {
 			// It has at least one ephemeral inline volume, work on it.
-			key, err := kcache.DeletionHandlingMetaNamespaceKeyFunc(pod)
+			key, err := kcache.DeletionHandlingObjectKeyFunc(pod)
 			if err != nil {
 				runtime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", pod, err))
 				return

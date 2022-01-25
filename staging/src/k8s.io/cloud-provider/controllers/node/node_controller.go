@@ -260,7 +260,7 @@ func (cnc *CloudNodeController) UpdateNodeStatus(ctx context.Context) error {
 func (cnc *CloudNodeController) enqueueNode(obj interface{}) {
 	var key string
 	var err error
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+	if key, err = cache.ObjectKey(obj); err != nil {
 		utilruntime.HandleError(err)
 		return
 	}

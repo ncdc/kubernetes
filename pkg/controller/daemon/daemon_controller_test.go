@@ -529,8 +529,8 @@ func TestExpectationsOnRecreate(t *testing.T) {
 	dsc.eventRecorder = fakeRecorder
 
 	fakePodControl := newFakePodControl()
-	fakePodControl.podStore = cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc) // fake store that we don't use
-	fakePodControl.expectations = controller.NewControllerExpectations()                 // fake expectations that we don't use
+	fakePodControl.podStore = cache.NewStore(cache.DeletionHandlingObjectKeyFunc) // fake store that we don't use
+	fakePodControl.expectations = controller.NewControllerExpectations()          // fake expectations that we don't use
 	dsc.podControl = fakePodControl
 
 	manager := &daemonSetsController{

@@ -682,7 +682,7 @@ func (r *crdHandler) getOrCreateServingInfoFor(crd *apiextensionsv1.CustomResour
 	// If updateCustomResourceDefinition sees an update and happens later, the storage will be deleted and
 	// we will re-create the updated storage on demand. If updateCustomResourceDefinition happens before,
 	// we make sure that we observe the same up-to-date CRD.
-	key, err := cache.MetaNamespaceKeyFunc(crd)
+	key, err := cache.ObjectKey(crd)
 	if err != nil {
 		return nil, err
 	}

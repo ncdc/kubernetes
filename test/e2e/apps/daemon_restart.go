@@ -206,7 +206,7 @@ var _ = SIGDescribe("DaemonRestart [Disruptive]", func() {
 	f := framework.NewDefaultFramework("daemonrestart")
 	rcName := "daemonrestart" + strconv.Itoa(numPods) + "-" + string(uuid.NewUUID())
 	labelSelector := labels.Set(map[string]string{"name": rcName}).AsSelector()
-	existingPods := cache.NewStore(cache.MetaNamespaceKeyFunc)
+	existingPods := cache.NewStore(cache.ObjectKey)
 	var ns string
 	var config testutils.RCConfig
 	var controller cache.Controller

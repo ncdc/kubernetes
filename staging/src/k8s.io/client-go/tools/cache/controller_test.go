@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	fcache "k8s.io/client-go/tools/cache/testing"
 
-	"github.com/google/gofuzz"
+	fuzz "github.com/google/gofuzz"
 )
 
 func Example() {
@@ -40,13 +40,13 @@ func Example() {
 	source := fcache.NewFakeControllerSource()
 
 	// This will hold the downstream state, as we know it.
-	downstream := NewStore(DeletionHandlingMetaNamespaceKeyFunc)
+	downstream := NewStore(DeletionHandlingObjectKeyFunc)
 
 	// This will hold incoming changes. Note how we pass downstream in as a
 	// KeyLister, that way resync operations will result in the correct set
 	// of update/delete deltas.
 	fifo := NewDeltaFIFOWithOptions(DeltaFIFOOptions{
-		KeyFunction:  MetaNamespaceKeyFunc,
+		KeyFunction:  ObjectKey,
 		KnownObjects: downstream,
 	})
 
@@ -142,7 +142,7 @@ func ExampleNewInformer() {
 				source.Delete(obj.(runtime.Object))
 			},
 			DeleteFunc: func(obj interface{}) {
-				key, err := DeletionHandlingMetaNamespaceKeyFunc(obj)
+				key, err := DeletionHandlingObjectKeyFunc(obj)
 				if err != nil {
 					key = "oops something went wrong with the key"
 				}
@@ -196,7 +196,7 @@ func TestHammerController(t *testing.T) {
 	outputSet := map[string][]string{}
 
 	recordFunc := func(eventType string, obj interface{}) {
-		key, err := DeletionHandlingMetaNamespaceKeyFunc(obj)
+		key, err := DeletionHandlingObjectKeyFunc(obj)
 		if err != nil {
 			t.Errorf("something wrong with key: %v", err)
 			key = "oops something went wrong with the key"

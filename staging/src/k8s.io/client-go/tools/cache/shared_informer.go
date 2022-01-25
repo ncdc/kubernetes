@@ -85,11 +85,10 @@ import (
 // too soon, the authoritative state service ends, or communication
 // problems persistently thwart the desired result).
 //
-// The keys in the Store are of the form namespace/name for namespaced
-// objects, and are simply the name for non-namespaced objects.
-// Clients can use `MetaNamespaceKeyFunc(obj)` to extract the key for
-// a given object, and `SplitMetaNamespaceKey(key)` to split a key
-// into its constituent parts.
+// By default, the keys in the Store are of the form namespace/name for
+// namespaced objects, and are simply the name for non-namespaced objects.
+// Clients can use `ObjectKey(obj)` to extract the key for a given object,
+// and `DecodeKey(key)` to split a key into its constituent parts.
 //
 // Every query against the local cache is answered entirely from one
 // snapshot of the cache's state.  Thus, the result of a `List` call
@@ -211,7 +210,8 @@ func NewSharedIndexInformer(lw ListerWatcher, exampleObject runtime.Object, defa
 	realClock := &clock.RealClock{}
 	sharedIndexInformer := &sharedIndexInformer{
 		processor:                       &sharedProcessor{clock: realClock},
-		indexer:                         NewIndexer(DeletionHandlingMetaNamespaceKeyFunc, indexers),
+		keyFunc:                         ObjectKey,
+		indexer:                         NewIndexer(DeletionHandlingObjectKeyFunc, indexers),
 		listerWatcher:                   lw,
 		objectType:                      exampleObject,
 		resyncCheckPeriod:               defaultEventHandlerResyncPeriod,
@@ -285,6 +285,7 @@ func WaitForCacheSync(stopCh <-chan struct{}, cacheSyncs ...InformerSynced) bool
 // sharedProcessor, which is responsible for relaying those
 // notifications to each of the informer's clients.
 type sharedIndexInformer struct {
+	keyFunc    KeyFunc
 	indexer    Indexer
 	controller Controller
 
@@ -373,6 +374,7 @@ func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
 		return
 	}
 	fifo := NewDeltaFIFOWithOptions(DeltaFIFOOptions{
+		KeyFunction:           s.keyFunc,
 		KnownObjects:          s.indexer,
 		EmitDeltaTypeReplaced: true,
 	})

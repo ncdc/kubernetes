@@ -35,7 +35,7 @@ type DeltaFIFOOptions struct {
 	// KeyFunction is used to figure out what key an object should have. (It's
 	// exposed in the returned DeltaFIFO's KeyOf() method, with additional
 	// handling around deleted objects and queue state).
-	// Optional, the default is MetaNamespaceKeyFunc.
+	// Optional, the default is ObjectKey.
 	KeyFunction KeyFunc
 
 	// KnownObjects is expected to return a list of keys that the consumer of
@@ -217,7 +217,7 @@ func NewDeltaFIFO(keyFunc KeyFunc, knownObjects KeyListerGetter) *DeltaFIFO {
 // items. See also the comment on DeltaFIFO.
 func NewDeltaFIFOWithOptions(opts DeltaFIFOOptions) *DeltaFIFO {
 	if opts.KeyFunction == nil {
-		opts.KeyFunction = MetaNamespaceKeyFunc
+		opts.KeyFunction = ObjectKey
 	}
 
 	f := &DeltaFIFO{

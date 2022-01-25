@@ -243,7 +243,7 @@ func (f *fixture) expectUpdateFooStatusAction(foo *samplecontroller.Foo) {
 }
 
 func getKey(foo *samplecontroller.Foo, t *testing.T) string {
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(foo)
+	key, err := cache.DeletionHandlingObjectKeyFunc(foo)
 	if err != nil {
 		t.Errorf("Unexpected error getting key for foo %v: %v", foo.Name, err)
 		return ""

@@ -640,7 +640,7 @@ func TestSchedulerMultipleProfilesScheduling(t *testing.T) {
 func TestSchedulerNoPhantomPodAfterExpire(t *testing.T) {
 	stop := make(chan struct{})
 	defer close(stop)
-	queuedPodStore := clientcache.NewFIFO(clientcache.MetaNamespaceKeyFunc)
+	queuedPodStore := clientcache.NewFIFO(clientcache.ObjectKey)
 	scache := internalcache.New(100*time.Millisecond, stop)
 	pod := podWithPort("pod.Name", "", 8080)
 	node := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "machine1", UID: types.UID("machine1")}}
@@ -707,7 +707,7 @@ func TestSchedulerNoPhantomPodAfterExpire(t *testing.T) {
 func TestSchedulerNoPhantomPodAfterDelete(t *testing.T) {
 	stop := make(chan struct{})
 	defer close(stop)
-	queuedPodStore := clientcache.NewFIFO(clientcache.MetaNamespaceKeyFunc)
+	queuedPodStore := clientcache.NewFIFO(clientcache.ObjectKey)
 	scache := internalcache.New(10*time.Minute, stop)
 	firstPod := podWithPort("pod.Name", "", 8080)
 	node := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "machine1", UID: types.UID("machine1")}}
@@ -811,7 +811,7 @@ func setupTestSchedulerWithOnePodOnNode(t *testing.T, queuedPodStore *clientcach
 func TestSchedulerFailedSchedulingReasons(t *testing.T) {
 	stop := make(chan struct{})
 	defer close(stop)
-	queuedPodStore := clientcache.NewFIFO(clientcache.MetaNamespaceKeyFunc)
+	queuedPodStore := clientcache.NewFIFO(clientcache.ObjectKey)
 	scache := internalcache.New(10*time.Minute, stop)
 
 	// Design the baseline for the pods, and we will make nodes that don't fit it later.
@@ -951,7 +951,7 @@ func setupTestScheduler(queuedPodStore *clientcache.FIFO, scache internalcache.C
 
 func setupTestSchedulerWithVolumeBinding(volumeBinder volumebinding.SchedulerVolumeBinder, stop <-chan struct{}, broadcaster events.EventBroadcaster) (*Scheduler, chan *v1.Binding, chan error) {
 	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "machine1", UID: types.UID("machine1")}}
-	queuedPodStore := clientcache.NewFIFO(clientcache.MetaNamespaceKeyFunc)
+	queuedPodStore := clientcache.NewFIFO(clientcache.ObjectKey)
 	pod := podWithID("foo", "")
 	pod.Namespace = "foo-ns"
 	pod.Spec.Volumes = append(pod.Spec.Volumes, v1.Volume{Name: "testVol",

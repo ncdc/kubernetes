@@ -682,13 +682,13 @@ func runSyncTests(t *testing.T, tests []controllerTest, storageClasses []*storag
 		reactor.AddVolumes(test.initialVolumes)
 
 		// Inject classes into controller via a custom lister.
-		indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+		indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{})
 		for _, class := range storageClasses {
 			indexer.Add(class)
 		}
 		ctrl.classLister = storagelisters.NewStorageClassLister(indexer)
 
-		podIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+		podIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{})
 		for _, pod := range pods {
 			podIndexer.Add(pod)
 			ctrl.podIndexer.Add(pod)
@@ -744,7 +744,7 @@ func runMultisyncTests(t *testing.T, tests []controllerTest, storageClasses []*s
 		}
 
 		// Inject classes into controller via a custom lister.
-		indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+		indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{})
 		for _, class := range storageClasses {
 			indexer.Add(class)
 		}

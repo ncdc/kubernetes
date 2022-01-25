@@ -72,7 +72,7 @@ func TestStatefulSetStatusUpdaterUpdateReplicasFailure(t *testing.T) {
 	set := newStatefulSet(3)
 	status := apps.StatefulSetStatus{ObservedGeneration: 3, Replicas: 2}
 	fakeClient := &fake.Clientset{}
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	indexer.Add(set)
 	setLister := appslisters.NewStatefulSetLister(indexer)
 	updater := NewRealStatefulSetStatusUpdater(fakeClient, setLister)
@@ -89,7 +89,7 @@ func TestStatefulSetStatusUpdaterUpdateReplicasConflict(t *testing.T) {
 	status := apps.StatefulSetStatus{ObservedGeneration: 3, Replicas: 2}
 	conflict := false
 	fakeClient := &fake.Clientset{}
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	indexer.Add(set)
 	setLister := appslisters.NewStatefulSetLister(indexer)
 	updater := NewRealStatefulSetStatusUpdater(fakeClient, setLister)
@@ -114,7 +114,7 @@ func TestStatefulSetStatusUpdaterUpdateReplicasConflictFailure(t *testing.T) {
 	set := newStatefulSet(3)
 	status := apps.StatefulSetStatus{ObservedGeneration: 3, Replicas: 2}
 	fakeClient := &fake.Clientset{}
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	indexer.Add(set)
 	setLister := appslisters.NewStatefulSetLister(indexer)
 	updater := NewRealStatefulSetStatusUpdater(fakeClient, setLister)

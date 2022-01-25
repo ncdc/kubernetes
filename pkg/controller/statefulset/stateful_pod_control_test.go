@@ -25,7 +25,7 @@ import (
 	"time"
 
 	apps "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,7 +47,7 @@ func TestStatefulPodControlCreatesPods(t *testing.T) {
 	set := newStatefulSet(3)
 	pod := newStatefulSetPod(set, 0)
 	fakeClient := &fake.Clientset{}
-	claimIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	claimIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	claimLister := corelisters.NewPersistentVolumeClaimLister(claimIndexer)
 	control := NewStatefulPodControl(fakeClient, nil, claimLister, recorder)
 	fakeClient.AddReactor("get", "persistentvolumeclaims", func(action core.Action) (bool, runtime.Object, error) {
@@ -82,7 +82,7 @@ func TestStatefulPodControlCreatePodExists(t *testing.T) {
 	pod := newStatefulSetPod(set, 0)
 	fakeClient := &fake.Clientset{}
 	pvcs := getPersistentVolumeClaims(set, pod)
-	pvcIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	pvcIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	for k := range pvcs {
 		pvc := pvcs[k]
 		pvcIndexer.Add(&pvc)
@@ -113,7 +113,7 @@ func TestStatefulPodControlCreatePodPvcCreateFailure(t *testing.T) {
 	set := newStatefulSet(3)
 	pod := newStatefulSetPod(set, 0)
 	fakeClient := &fake.Clientset{}
-	pvcIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	pvcIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	pvcLister := corelisters.NewPersistentVolumeClaimLister(pvcIndexer)
 	control := NewStatefulPodControl(fakeClient, nil, pvcLister, recorder)
 	fakeClient.AddReactor("create", "persistentvolumeclaims", func(action core.Action) (bool, runtime.Object, error) {
@@ -142,7 +142,7 @@ func TestStatefulPodControlCreatePodPVCDeleting(t *testing.T) {
 	pod := newStatefulSetPod(set, 0)
 	fakeClient := &fake.Clientset{}
 	pvcs := getPersistentVolumeClaims(set, pod)
-	pvcIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	pvcIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	deleteTime := time.Date(2019, time.January, 1, 0, 0, 0, 0, time.UTC)
 	for k := range pvcs {
 		pvc := pvcs[k]
@@ -216,7 +216,7 @@ func TestStatefulPodControlCreatePodFailed(t *testing.T) {
 	set := newStatefulSet(3)
 	pod := newStatefulSetPod(set, 0)
 	fakeClient := &fake.Clientset{}
-	pvcIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	pvcIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	pvcLister := corelisters.NewPersistentVolumeClaimLister(pvcIndexer)
 	control := NewStatefulPodControl(fakeClient, nil, pvcLister, recorder)
 	fakeClient.AddReactor("create", "persistentvolumeclaims", func(action core.Action) (bool, runtime.Object, error) {
@@ -246,7 +246,7 @@ func TestStatefulPodControlNoOpUpdate(t *testing.T) {
 	pod := newStatefulSetPod(set, 0)
 	fakeClient := &fake.Clientset{}
 	claims := getPersistentVolumeClaims(set, pod)
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	for k := range claims {
 		claim := claims[k]
 		indexer.Add(&claim)
@@ -271,7 +271,7 @@ func TestStatefulPodControlUpdatesIdentity(t *testing.T) {
 	set := newStatefulSet(3)
 	pod := newStatefulSetPod(set, 0)
 	fakeClient := fake.NewSimpleClientset(set, pod)
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	claimLister := corelisters.NewPersistentVolumeClaimLister(indexer)
 	control := NewStatefulPodControl(fakeClient, nil, claimLister, recorder)
 	var updated *v1.Pod
@@ -300,12 +300,12 @@ func TestStatefulPodControlUpdateIdentityFailure(t *testing.T) {
 	set := newStatefulSet(3)
 	pod := newStatefulSetPod(set, 0)
 	fakeClient := &fake.Clientset{}
-	podIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	podIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	gooPod := newStatefulSetPod(set, 0)
 	gooPod.Name = "goo-0"
 	podIndexer.Add(gooPod)
 	podLister := corelisters.NewPodLister(podIndexer)
-	claimIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	claimIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	claimLister := corelisters.NewPersistentVolumeClaimLister(claimIndexer)
 	control := NewStatefulPodControl(fakeClient, podLister, claimLister, recorder)
 	fakeClient.AddReactor("update", "pods", func(action core.Action) (bool, runtime.Object, error) {
@@ -332,7 +332,7 @@ func TestStatefulPodControlUpdatesPodStorage(t *testing.T) {
 	set := newStatefulSet(3)
 	pod := newStatefulSetPod(set, 0)
 	fakeClient := &fake.Clientset{}
-	pvcIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	pvcIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	pvcLister := corelisters.NewPersistentVolumeClaimLister(pvcIndexer)
 	control := NewStatefulPodControl(fakeClient, nil, pvcLister, recorder)
 	pvcs := getPersistentVolumeClaims(set, pod)
@@ -379,7 +379,7 @@ func TestStatefulPodControlUpdatePodStorageFailure(t *testing.T) {
 	set := newStatefulSet(3)
 	pod := newStatefulSetPod(set, 0)
 	fakeClient := &fake.Clientset{}
-	pvcIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	pvcIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	pvcLister := corelisters.NewPersistentVolumeClaimLister(pvcIndexer)
 	control := NewStatefulPodControl(fakeClient, nil, pvcLister, recorder)
 	pvcs := getPersistentVolumeClaims(set, pod)
@@ -416,9 +416,9 @@ func TestStatefulPodControlUpdatePodConflictSuccess(t *testing.T) {
 	set := newStatefulSet(3)
 	pod := newStatefulSetPod(set, 0)
 	fakeClient := &fake.Clientset{}
-	podIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	podIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	podLister := corelisters.NewPodLister(podIndexer)
-	claimIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	claimIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	claimLister := corelisters.NewPersistentVolumeClaimLister(podIndexer)
 	gooPod := newStatefulSetPod(set, 0)
 	gooPod.Labels[apps.StatefulSetPodNameLabel] = "goo-starts"
@@ -498,7 +498,7 @@ func TestStatefulPodControlClaimsMatchDeletionPolcy(t *testing.T) {
 	// The claimOwnerMatchesSetAndPod is tested exhaustively in stateful_set_utils_test; this
 	// test is for the wiring to the method tested there.
 	fakeClient := &fake.Clientset{}
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	claimLister := corelisters.NewPersistentVolumeClaimLister(indexer)
 	set := newStatefulSet(3)
 	pod := newStatefulSetPod(set, 0)
@@ -534,7 +534,7 @@ func TestStatefulPodControlUpdatePodClaimForRetentionPolicy(t *testing.T) {
 	testFn := func(t *testing.T) {
 		defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.StatefulSetAutoDeletePVC, true)()
 		fakeClient := &fake.Clientset{}
-		indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+		indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 		claimLister := corelisters.NewPersistentVolumeClaimLister(indexer)
 		set := newStatefulSet(3)
 		set.GetObjectMeta().SetUID("set-123")
@@ -635,7 +635,7 @@ func TestPodClaimIsStale(t *testing.T) {
 			WhenScaled:  apps.DeletePersistentVolumeClaimRetentionPolicyType,
 		}
 		set.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}}
-		claimIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+		claimIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 		for i, claimState := range tc.claimStates {
 			claim := v1.PersistentVolumeClaim{}
 			claim.Name = fmt.Sprintf("claim-%d", i)
@@ -684,9 +684,9 @@ func TestStatefulPodControlRetainDeletionPolicyUpdate(t *testing.T) {
 		}
 		pod := newStatefulSetPod(set, 0)
 		fakeClient := &fake.Clientset{}
-		podIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+		podIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 		podLister := corelisters.NewPodLister(podIndexer)
-		claimIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+		claimIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 		claimLister := corelisters.NewPersistentVolumeClaimLister(claimIndexer)
 		podIndexer.Add(pod)
 		claims := getPersistentVolumeClaims(set, pod)
@@ -741,8 +741,8 @@ func TestStatefulPodControlRetentionPolicyUpdate(t *testing.T) {
 	}
 	pod := newStatefulSetPod(set, 0)
 	fakeClient := &fake.Clientset{}
-	podIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
-	claimIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	podIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	claimIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	podIndexer.Add(pod)
 	claims := getPersistentVolumeClaims(set, pod)
 	if len(claims) != 1 {
@@ -789,9 +789,9 @@ func TestStatefulPodControlRetentionPolicyUpdateMissingClaims(t *testing.T) {
 	}
 	pod := newStatefulSetPod(set, 0)
 	fakeClient := &fake.Clientset{}
-	podIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	podIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	podLister := corelisters.NewPodLister(podIndexer)
-	claimIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	claimIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	claimLister := corelisters.NewPersistentVolumeClaimLister(claimIndexer)
 	podIndexer.Add(pod)
 	fakeClient.AddReactor("update", "persistentvolumeclaims", func(action core.Action) (bool, runtime.Object, error) {

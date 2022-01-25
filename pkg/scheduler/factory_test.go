@@ -241,13 +241,13 @@ func getPodFromPriorityQueue(queue *internalqueue.PriorityQueue, pod *v1.Pod) *v
 		return nil
 	}
 
-	queryPodKey, err := cache.MetaNamespaceKeyFunc(pod)
+	queryPodKey, err := cache.ObjectKey(pod)
 	if err != nil {
 		return nil
 	}
 
 	for _, foundPod := range podList {
-		foundPodKey, err := cache.MetaNamespaceKeyFunc(foundPod)
+		foundPodKey, err := cache.ObjectKey(foundPod)
 		if err != nil {
 			return nil
 		}
