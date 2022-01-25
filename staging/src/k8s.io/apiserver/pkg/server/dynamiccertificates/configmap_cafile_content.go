@@ -129,7 +129,7 @@ func NewDynamicCAFromConfigMapController(purpose, namespace, name, key string, k
 
 func (c *ConfigMapCAController) keyFn() string {
 	// this format matches DeletionHandlingMetaNamespaceKeyFunc for our single key
-	return c.configmapNamespace + "/" + c.configmapName
+	return cache.NamespaceNameKey(c.configmapNamespace, c.configmapName)
 }
 
 // AddListener adds a listener to be notified when the CA content changes.

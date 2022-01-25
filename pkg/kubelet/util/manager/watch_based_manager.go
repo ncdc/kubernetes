@@ -272,15 +272,6 @@ func (c *objectCache) DeleteReference(namespace, name string) {
 	}
 }
 
-// key returns key of an object with a given name and namespace.
-// This has to be in-sync with cache.MetaNamespaceKeyFunc.
-func (c *objectCache) key(namespace, name string) string {
-	if len(namespace) > 0 {
-		return namespace + "/" + name
-	}
-	return name
-}
-
 func (c *objectCache) Get(namespace, name string) (runtime.Object, error) {
 	key := objectKey{namespace: namespace, name: name}
 
@@ -299,7 +290,7 @@ func (c *objectCache) Get(namespace, name string) (runtime.Object, error) {
 	if err := wait.PollImmediate(10*time.Millisecond, time.Second, item.hasSynced); err != nil {
 		return nil, fmt.Errorf("failed to sync %s cache: %v", c.groupResource.String(), err)
 	}
-	obj, exists, err := item.store.GetByKey(c.key(namespace, name))
+	obj, exists, err := item.store.GetByKey(cache.NamespaceNameKey(namespace, name))
 	if err != nil {
 		return nil, err
 	}
