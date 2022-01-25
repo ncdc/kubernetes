@@ -177,7 +177,7 @@ func TestControllerExpectations(t *testing.T) {
 	rc := newReplicationController(1)
 
 	// RC fires off adds and deletes at apiserver, then sets expectations
-	rcKey, err := KeyFunc(rc)
+	rcKey, err := cache.ObjectKey(rc)
 	assert.NoError(t, err, "Couldn't get key for object %#v: %v", rc, err)
 
 	e.SetExpectations(rcKey, adds, dels)
@@ -247,7 +247,7 @@ func TestUIDExpectations(t *testing.T) {
 		rc.Name = rcName
 		rc.Spec.Selector[rcName] = rcName
 		podList := newPodList(nil, 5, v1.PodRunning, rc)
-		rcKey, err := KeyFunc(rc)
+		rcKey, err := cache.ObjectKey(rc)
 		if err != nil {
 			t.Fatalf("Couldn't get key for object %#v: %v", rc, err)
 		}
