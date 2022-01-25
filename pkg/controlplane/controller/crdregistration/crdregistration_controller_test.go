@@ -24,7 +24,6 @@ import (
 	crdlisters "k8s.io/apiextensions-apiserver/pkg/client/listers/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/endpoints/discovery"
 	"k8s.io/client-go/tools/cache"
 	apiregistration "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 )
@@ -105,10 +104,9 @@ func TestHandleVersionUpdate(t *testing.T) {
 				crdCache.Add(test.startingCRDs[i])
 			}
 
-			c.handleVersionUpdate(discovery.ClusterGroupVersion{
-				ClusterName: "",
-				Group:       test.version.Group,
-				Version:     test.version.Version,
+			c.handleVersionUpdate(schema.GroupVersion{
+				Group:   test.version.Group,
+				Version: test.version.Version,
 			})
 
 			if !reflect.DeepEqual(test.expectedAdded, registration.added) {
