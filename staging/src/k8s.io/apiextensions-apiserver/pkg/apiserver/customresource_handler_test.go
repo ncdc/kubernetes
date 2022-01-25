@@ -148,7 +148,7 @@ func TestConvertFieldLabel(t *testing.T) {
 func TestRouting(t *testing.T) {
 	hasSynced := false
 
-	crdIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	crdIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	crdLister := listers.NewCustomResourceDefinitionLister(crdIndexer)
 
 	// note that in production we delegate to the special handler that is attached at the end of the delegation chain that checks if the server has installed all known HTTP paths before replying to the client.

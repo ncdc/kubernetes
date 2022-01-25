@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -61,7 +61,7 @@ func (l *testListener) OnDelete(obj interface{}) {
 }
 
 func (l *testListener) handle(obj interface{}) {
-	key, _ := MetaNamespaceKeyFunc(obj)
+	key, _ := ObjectKey(obj)
 	fmt.Printf("%s: handle: %v\n", l.name, key)
 	l.lock.Lock()
 	defer l.lock.Unlock()

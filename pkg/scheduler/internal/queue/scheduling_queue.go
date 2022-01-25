@@ -929,7 +929,7 @@ func MakeNextPodFunc(queue SchedulingQueue) func() *framework.QueuedPodInfo {
 }
 
 func podInfoKeyFunc(obj interface{}) (string, error) {
-	return cache.MetaNamespaceKeyFunc(obj.(*framework.QueuedPodInfo).Pod)
+	return cache.ObjectKey(obj.(*framework.QueuedPodInfo).Pod)
 }
 
 // Checks if the Pod may become schedulable upon the event.

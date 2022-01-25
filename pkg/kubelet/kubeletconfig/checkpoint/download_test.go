@@ -138,8 +138,8 @@ func TestRemoteConfigMapDownload(t *testing.T) {
 		t.Fatalf("error constructing payload: %v", err)
 	}
 
-	missingStore := cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)
-	hasStore := cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)
+	missingStore := cache.NewStore(cache.DeletionHandlingObjectKeyFunc)
+	hasStore := cache.NewStore(cache.DeletionHandlingObjectKeyFunc)
 	if err := hasStore.Add(cm); err != nil {
 		t.Fatalf("unexpected error constructing hasStore")
 	}

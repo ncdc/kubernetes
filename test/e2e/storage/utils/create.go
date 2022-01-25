@@ -253,11 +253,11 @@ type ItemFactory interface {
 }
 
 // describeItem always returns a string that describes the item,
-// usually by calling out to cache.MetaNamespaceKeyFunc which
+// usually by calling out to cache.ObjectKey which
 // concatenates namespace (if set) and name. If that fails, the entire
 // item gets converted to a string.
 func describeItem(item interface{}) string {
-	key, err := cache.MetaNamespaceKeyFunc(item)
+	key, err := cache.ObjectKey(item)
 	if err == nil && key != "" {
 		return fmt.Sprintf("%T: %s", item, key)
 	}

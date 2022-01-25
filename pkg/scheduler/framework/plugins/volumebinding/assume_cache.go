@@ -159,7 +159,7 @@ func (c *assumeCache) add(obj interface{}) {
 		return
 	}
 
-	name, err := cache.MetaNamespaceKeyFunc(obj)
+	name, err := cache.ObjectKey(obj)
 	if err != nil {
 		klog.ErrorS(&errObjectName{err}, "Add failed")
 		return
@@ -206,7 +206,7 @@ func (c *assumeCache) delete(obj interface{}) {
 		return
 	}
 
-	name, err := cache.MetaNamespaceKeyFunc(obj)
+	name, err := cache.ObjectKey(obj)
 	if err != nil {
 		klog.ErrorS(&errObjectName{err}, "Failed to delete")
 		return
@@ -296,7 +296,7 @@ func (c *assumeCache) List(indexObj interface{}) []interface{} {
 }
 
 func (c *assumeCache) Assume(obj interface{}) error {
-	name, err := cache.MetaNamespaceKeyFunc(obj)
+	name, err := cache.ObjectKey(obj)
 	if err != nil {
 		return &errObjectName{err}
 	}
@@ -416,7 +416,7 @@ type PVCAssumeCache interface {
 	AssumeCache
 
 	// GetPVC returns the PVC from the cache with given pvcKey.
-	// pvcKey is the result of MetaNamespaceKeyFunc on PVC obj
+	// pvcKey is the result of ObjectKey on PVC obj
 	GetPVC(pvcKey string) (*v1.PersistentVolumeClaim, error)
 	GetAPIPVC(pvcKey string) (*v1.PersistentVolumeClaim, error)
 }

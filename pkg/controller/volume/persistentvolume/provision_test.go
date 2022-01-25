@@ -504,7 +504,7 @@ func TestProvisionSync(t *testing.T) {
 			noerrors,
 			wrapTestWithInjectedOperation(wrapTestWithProvisionCalls([]provisionCall{provision1Success}, testSyncClaim),
 				func(ctrl *PersistentVolumeController, reactor *pvtesting.VolumeReactor) {
-					nodesIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+					nodesIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{})
 					node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}}
 					nodesIndexer.Add(node)
 					ctrl.NodeLister = corelisters.NewNodeLister(nodesIndexer)

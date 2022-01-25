@@ -337,7 +337,7 @@ func TestControllerSync(t *testing.T) {
 		}
 
 		storageClasses[0].Provisioner = "gcr.io/vendor-csi"
-		indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+		indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{})
 		for _, class := range storageClasses {
 			indexer.Add(class)
 		}
@@ -440,7 +440,7 @@ func storeVersion(t *testing.T, prefix string, c cache.Store, version string, ex
 // TestControllerCache tests func storeObjectUpdate()
 func TestControllerCache(t *testing.T) {
 	// Cache under test
-	c := cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)
+	c := cache.NewStore(cache.DeletionHandlingObjectKeyFunc)
 
 	// Store new PV
 	storeVersion(t, "Step1", c, "1", true)
@@ -457,7 +457,7 @@ func TestControllerCache(t *testing.T) {
 }
 
 func TestControllerCacheParsingError(t *testing.T) {
-	c := cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)
+	c := cache.NewStore(cache.DeletionHandlingObjectKeyFunc)
 	// There must be something in the cache to compare with
 	storeVersion(t, "Step1", c, "1", true)
 

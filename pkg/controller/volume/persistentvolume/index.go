@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sort"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	pvutil "k8s.io/kubernetes/pkg/controller/volume/persistentvolume/util"
@@ -34,7 +34,7 @@ type persistentVolumeOrderedIndex struct {
 }
 
 func newPersistentVolumeOrderedIndex() persistentVolumeOrderedIndex {
-	return persistentVolumeOrderedIndex{cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{"accessmodes": accessModesIndexFunc})}
+	return persistentVolumeOrderedIndex{cache.NewIndexer(cache.ObjectKey, cache.Indexers{"accessmodes": accessModesIndexFunc})}
 }
 
 // accessModesIndexFunc is an indexing function that returns a persistent

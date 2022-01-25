@@ -17,11 +17,12 @@ limitations under the License.
 package cache
 
 import (
-	"k8s.io/apimachinery/pkg/util/sets"
 	"strings"
 	"testing"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -31,7 +32,7 @@ func testIndexFunc(obj interface{}) ([]string, error) {
 }
 
 func TestGetIndexFuncValues(t *testing.T) {
-	index := NewIndexer(MetaNamespaceKeyFunc, Indexers{"testmodes": testIndexFunc})
+	index := NewIndexer(ObjectKey, Indexers{"testmodes": testIndexFunc})
 
 	pod1 := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "one", Labels: map[string]string{"foo": "bar"}}}
 	pod2 := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "two", Labels: map[string]string{"foo": "bar"}}}
@@ -61,7 +62,7 @@ func testUsersIndexFunc(obj interface{}) ([]string, error) {
 }
 
 func TestMultiIndexKeys(t *testing.T) {
-	index := NewIndexer(MetaNamespaceKeyFunc, Indexers{"byUser": testUsersIndexFunc})
+	index := NewIndexer(ObjectKey, Indexers{"byUser": testUsersIndexFunc})
 
 	pod1 := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "one", Annotations: map[string]string{"users": "ernie,bert"}}}
 	pod2 := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "two", Annotations: map[string]string{"users": "bert,oscar"}}}

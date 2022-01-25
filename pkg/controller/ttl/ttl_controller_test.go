@@ -20,7 +20,7 @@ import (
 	"context"
 	"testing"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	listers "k8s.io/client-go/listers/core/v1"
@@ -131,7 +131,7 @@ func TestUpdateNodeIfNeeded(t *testing.T) {
 
 	for i, testCase := range testCases {
 		fakeClient := &fake.Clientset{}
-		nodeStore := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+		nodeStore := cache.NewIndexer(cache.ObjectKey, cache.Indexers{})
 		nodeStore.Add(testCase.node)
 		ttlController := &Controller{
 			kubeClient:        fakeClient,

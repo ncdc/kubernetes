@@ -176,13 +176,13 @@ func main() {
 	// of the Pod than the version which was responsible for triggering the update.
 	indexer, informer := cache.NewIndexerInformer(podListWatcher, &v1.Pod{}, 0, cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(obj)
+			key, err := cache.ObjectKey(obj)
 			if err == nil {
 				queue.Add(key)
 			}
 		},
 		UpdateFunc: func(old interface{}, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(new)
+			key, err := cache.ObjectKey(new)
 			if err == nil {
 				queue.Add(key)
 			}
@@ -190,7 +190,7 @@ func main() {
 		DeleteFunc: func(obj interface{}) {
 			// IndexerInformer uses a delta queue, therefore for deletes we have to use this
 			// key function.
-			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			key, err := cache.DeletionHandlingObjectKeyFunc(obj)
 			if err == nil {
 				queue.Add(key)
 			}

@@ -20,7 +20,7 @@ import (
 	"net/url"
 	"testing"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	v1listers "k8s.io/client-go/listers/core/v1"
@@ -201,7 +201,7 @@ func TestResolve(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		serviceCache := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+		serviceCache := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 		serviceLister := v1listers.NewServiceLister(serviceCache)
 		for i := range test.services {
 			if err := serviceCache.Add(test.services[i]); err != nil {
@@ -209,7 +209,7 @@ func TestResolve(t *testing.T) {
 			}
 		}
 
-		endpointCache := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+		endpointCache := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 		endpointLister := v1listers.NewEndpointsLister(endpointCache)
 		if test.endpoints != nil {
 			for _, svc := range test.services {

@@ -208,7 +208,7 @@ func (s *Controller) needFullSyncAndUnmark() bool {
 
 // obj could be an *v1.Service, or a DeletionFinalStateUnknown marker item.
 func (s *Controller) enqueueService(obj interface{}) {
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	key, err := cache.DeletionHandlingObjectKeyFunc(obj)
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", obj, err))
 		return

@@ -250,7 +250,7 @@ func TestConfigMapUpdateNoHotLoop(t *testing.T) {
 	for k, tc := range testcases {
 		t.Run(k, func(t *testing.T) {
 			client := fake.NewSimpleClientset(tc.ExistingConfigMaps...)
-			configMapIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+			configMapIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 			for _, obj := range tc.ExistingConfigMaps {
 				configMapIndexer.Add(obj)
 			}

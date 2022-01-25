@@ -68,7 +68,7 @@ func TestNamespaceGetMethod(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// test data
-			indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+			indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{})
 			for _, obj := range test.existingObjects {
 				err := indexer.Add(obj)
 				if err != nil {
@@ -103,7 +103,7 @@ func TestNamespaceListMethod(t *testing.T) {
 		newUnstructured("group/version", "TheKind", "ns-foo", "name-foo1"),
 		newUnstructured("group/version", "TheKind", "ns-bar", "name-bar"),
 	}
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{})
 	for _, obj := range objs {
 		err := indexer.Add(obj)
 		if err != nil {
@@ -166,7 +166,7 @@ func TestListerGetMethod(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// test data
-			indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+			indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{})
 			for _, obj := range test.existingObjects {
 				err := indexer.Add(obj)
 				if err != nil {
@@ -200,7 +200,7 @@ func TestListerListMethod(t *testing.T) {
 		newUnstructured("group/version", "TheKind", "ns-foo", "name-foo"),
 		newUnstructured("group/version", "TheKind", "ns-foo", "name-bar"),
 	}
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{})
 	for _, obj := range objs {
 		err := indexer.Add(obj)
 		if err != nil {

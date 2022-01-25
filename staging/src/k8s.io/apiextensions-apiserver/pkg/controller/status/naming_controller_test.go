@@ -321,7 +321,7 @@ func TestSync(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		crdIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+		crdIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 		for _, obj := range tc.existing {
 			crdIndexer.Add(obj)
 		}

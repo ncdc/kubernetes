@@ -1192,7 +1192,7 @@ func TestAdmitLimitedResourceWithQuota(t *testing.T) {
 		},
 	}
 	kubeClient := fake.NewSimpleClientset(resourceQuota)
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{"namespace": cache.MetaNamespaceIndexFunc})
+	indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{"namespace": cache.MetaNamespaceIndexFunc})
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
@@ -1247,7 +1247,7 @@ func TestAdmitLimitedResourceWithMultipleQuota(t *testing.T) {
 		},
 	}
 	kubeClient := fake.NewSimpleClientset(resourceQuota1, resourceQuota2)
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{"namespace": cache.MetaNamespaceIndexFunc})
+	indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{"namespace": cache.MetaNamespaceIndexFunc})
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
@@ -1292,7 +1292,7 @@ func TestAdmitLimitedResourceWithQuotaThatDoesNotCover(t *testing.T) {
 		},
 	}
 	kubeClient := fake.NewSimpleClientset(resourceQuota)
-	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{"namespace": cache.MetaNamespaceIndexFunc})
+	indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{"namespace": cache.MetaNamespaceIndexFunc})
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
@@ -1957,7 +1957,7 @@ func TestAdmitLimitedScopeWithCoverQuota(t *testing.T) {
 		if testCase.anotherQuota != nil {
 			kubeClient = fake.NewSimpleClientset(resourceQuota, testCase.anotherQuota)
 		}
-		indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{"namespace": cache.MetaNamespaceIndexFunc})
+		indexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{"namespace": cache.MetaNamespaceIndexFunc})
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 

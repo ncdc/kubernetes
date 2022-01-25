@@ -77,7 +77,7 @@ func newSourceFile(path string, nodeName types.NodeName, period time.Duration, u
 		}
 		updates <- kubetypes.PodUpdate{Pods: pods, Op: kubetypes.SET, Source: kubetypes.FileSource}
 	}
-	store := cache.NewUndeltaStore(send, cache.MetaNamespaceKeyFunc)
+	store := cache.NewUndeltaStore(send, cache.ObjectKey)
 	return &sourceFile{
 		path:           path,
 		nodeName:       nodeName,
@@ -201,7 +201,7 @@ func (s *sourceFile) extractFromFile(filename string) (pod *v1.Pod, err error) {
 	klog.V(3).InfoS("Reading config file", "path", filename)
 	defer func() {
 		if err == nil && pod != nil {
-			objKey, keyErr := cache.MetaNamespaceKeyFunc(pod)
+			objKey, keyErr := cache.ObjectKey(pod)
 			if keyErr != nil {
 				err = keyErr
 				return

@@ -291,11 +291,23 @@ func (r FilteringResourceEventHandler) OnDelete(obj interface{}) {
 // DeletionHandlingMetaNamespaceKeyFunc checks for
 // DeletedFinalStateUnknown objects before calling
 // MetaNamespaceKeyFunc.
+//
+// Deprecated. Use DeletionHandlingObjectKeyFunc instead.
 func DeletionHandlingMetaNamespaceKeyFunc(obj interface{}) (string, error) {
 	if d, ok := obj.(DeletedFinalStateUnknown); ok {
 		return d.Key, nil
 	}
 	return MetaNamespaceKeyFunc(obj)
+}
+
+// DeletionHandlingObjectKeyFunc checks for
+// DeletedFinalStateUnknown objects before calling
+// ObjectKeyFunc.
+func DeletionHandlingObjectKeyFunc(obj interface{}) (string, error) {
+	if d, ok := obj.(DeletedFinalStateUnknown); ok {
+		return d.Key, nil
+	}
+	return ObjectKey(obj)
 }
 
 // NewInformer returns a Store and a controller for populating the store
@@ -320,7 +332,7 @@ func NewInformer(
 	h ResourceEventHandler,
 ) (Store, Controller) {
 	// This will hold the client state, as we know it.
-	clientState := NewStore(DeletionHandlingMetaNamespaceKeyFunc)
+	clientState := NewStore(DeletionHandlingObjectKeyFunc)
 
 	return clientState, newInformer(lw, objType, resyncPeriod, h, clientState, nil)
 }
@@ -349,7 +361,7 @@ func NewIndexerInformer(
 	indexers Indexers,
 ) (Indexer, Controller) {
 	// This will hold the client state, as we know it.
-	clientState := NewIndexer(DeletionHandlingMetaNamespaceKeyFunc, indexers)
+	clientState := NewIndexer(DeletionHandlingObjectKeyFunc, indexers)
 
 	return clientState, newInformer(lw, objType, resyncPeriod, h, clientState, nil)
 }
@@ -380,7 +392,7 @@ func NewTransformingInformer(
 	transformer TransformFunc,
 ) (Store, Controller) {
 	// This will hold the client state, as we know it.
-	clientState := NewStore(DeletionHandlingMetaNamespaceKeyFunc)
+	clientState := NewStore(DeletionHandlingObjectKeyFunc)
 
 	return clientState, newInformer(lw, objType, resyncPeriod, h, clientState, transformer)
 }
@@ -401,7 +413,7 @@ func NewTransformingIndexerInformer(
 	transformer TransformFunc,
 ) (Indexer, Controller) {
 	// This will hold the client state, as we know it.
-	clientState := NewIndexer(DeletionHandlingMetaNamespaceKeyFunc, indexers)
+	clientState := NewIndexer(DeletionHandlingObjectKeyFunc, indexers)
 
 	return clientState, newInformer(lw, objType, resyncPeriod, h, clientState, transformer)
 }
@@ -432,6 +444,7 @@ func newInformer(
 	// KeyLister, that way resync operations will result in the correct set
 	// of update/delete deltas.
 	fifo := NewDeltaFIFOWithOptions(DeltaFIFOOptions{
+		KeyFunction:           ObjectKey,
 		KnownObjects:          clientState,
 		EmitDeltaTypeReplaced: true,
 	})

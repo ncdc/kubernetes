@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -78,7 +78,7 @@ func mockListerForResourceFunc(listersForResource map[schema.GroupVersionResourc
 }
 
 func newGenericLister(groupResource schema.GroupResource, items []runtime.Object) cache.GenericLister {
-	store := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{"namespace": cache.MetaNamespaceIndexFunc})
+	store := cache.NewIndexer(cache.ObjectKey, cache.Indexers{"namespace": cache.MetaNamespaceIndexFunc})
 	for _, item := range items {
 		store.Add(item)
 	}

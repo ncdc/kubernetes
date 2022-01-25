@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 
 	"k8s.io/klog/v2"
@@ -206,7 +206,7 @@ func (c *objectCache) newStore() *cacheStore {
 	// However, simple benchmarks show that memory overhead in that case is
 	// decrease from ~600B to ~300B per object. So we are not optimizing it
 	// until we will see a good reason for that.
-	store := cache.NewStore(cache.MetaNamespaceKeyFunc)
+	store := cache.NewStore(cache.ObjectKey)
 	return &cacheStore{store, sync.Mutex{}, false}
 }
 

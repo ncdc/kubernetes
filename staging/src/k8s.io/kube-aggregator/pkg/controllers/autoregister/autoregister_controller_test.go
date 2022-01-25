@@ -300,7 +300,7 @@ func TestSync(t *testing.T) {
 
 	for _, test := range tests {
 		fakeClient := fake.NewSimpleClientset()
-		apiServiceIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+		apiServiceIndexer := cache.NewIndexer(cache.ObjectKey, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
 		alreadySynced := map[string]bool{}
 		for k, v := range test.alreadySynced {

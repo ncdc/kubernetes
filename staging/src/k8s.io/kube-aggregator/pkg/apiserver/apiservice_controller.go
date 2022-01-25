@@ -156,7 +156,7 @@ func (c *APIServiceRegistrationController) processNextWorkItem() bool {
 }
 
 func (c *APIServiceRegistrationController) enqueueInternal(obj *v1.APIService) {
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	key, err := cache.DeletionHandlingObjectKeyFunc(obj)
 	if err != nil {
 		klog.Errorf("Couldn't get key for object %#v: %v", obj, err)
 		return

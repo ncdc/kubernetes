@@ -323,7 +323,7 @@ func (c *Controller) pvcAddedUpdated(obj interface{}) {
 		utilruntime.HandleError(fmt.Errorf("PVC informer returned non-PVC object: %#v", obj))
 		return
 	}
-	key, err := cache.MetaNamespaceKeyFunc(pvc)
+	key, err := cache.ObjectKey(pvc)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("couldn't get key for Persistent Volume Claim %#v: %v", pvc, err))
 		return
