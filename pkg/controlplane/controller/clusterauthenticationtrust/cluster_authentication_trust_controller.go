@@ -502,7 +502,7 @@ func (c *Controller) processNextWorkItem() bool {
 
 func keyFn() string {
 	// this format matches DeletionHandlingMetaNamespaceKeyFunc for our single key
-	return configMapNamespace + "/" + configMapName
+	return cache.NamespaceNameKey(configMapNamespace, configMapName)
 }
 
 func encodeCertificates(certs ...*x509.Certificate) ([]byte, error) {
