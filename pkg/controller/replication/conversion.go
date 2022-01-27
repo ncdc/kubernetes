@@ -29,7 +29,7 @@ import (
 
 	apps "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -82,10 +82,6 @@ type conversionLister struct {
 }
 
 func (l conversionLister) List(selector labels.Selector) ([]*apps.ReplicaSet, error) {
-	return l.ListWithContext(context.Background(), selector)
-}
-
-func (l conversionLister) ListWithContext(ctx context.Context, selector labels.Selector) ([]*apps.ReplicaSet, error) {
 	rcList, err := l.rcLister.List(selector)
 	if err != nil {
 		return nil, err

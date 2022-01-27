@@ -714,15 +714,7 @@ func (nl testNodeLister) Get(name string) (*v1.Node, error) {
 	return nil, fmt.Errorf("Node with name: %s does not exist", name)
 }
 
-func (nl testNodeLister) GetWithContext(ctx context.Context, name string) (*v1.Node, error) {
-	return nl.Get(name)
-}
-
 func (nl testNodeLister) List(_ labels.Selector) (ret []*v1.Node, err error) {
-	return nl.nodes, nil
-}
-
-func (nl testNodeLister) ListWithContext(ctx context.Context, _ labels.Selector) ([]*v1.Node, error) {
 	return nl.nodes, nil
 }
 
