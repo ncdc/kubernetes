@@ -46,12 +46,10 @@ func (r *versionDiscoveryHandler) ServeHTTP(w http.ResponseWriter, req *http.Req
 		return
 	}
 
-	ctx := req.Context()
-
 	requestedGroup := pathParts[1]
 	requestedVersion := pathParts[2]
 
-	crds, err := r.crdLister.ListWithContext(ctx, labels.Everything())
+	crds, err := r.crdLister.List(labels.Everything())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -168,11 +166,9 @@ func (r *groupDiscoveryHandler) ServeHTTP(w http.ResponseWriter, req *http.Reque
 	apiVersionsForDiscovery := []metav1.GroupVersionForDiscovery{}
 	versionsForDiscoveryMap := map[metav1.GroupVersion]bool{}
 
-	ctx := req.Context()
-
 	requestedGroup := pathParts[1]
 
-	crds, err := r.crdLister.ListWithContext(ctx, labels.Everything())
+	crds, err := r.crdLister.List(labels.Everything())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -239,7 +235,7 @@ func (r *rootDiscoveryHandler) Groups(ctx context.Context, req *http.Request) ([
 	apiVersionsForDiscovery := map[string][]metav1.GroupVersionForDiscovery{}
 	versionsForDiscoveryMap := map[string]map[metav1.GroupVersion]bool{}
 
-	crds, err := r.crdLister.ListWithContext(ctx, labels.Everything())
+	crds, err := r.crdLister.List(labels.Everything())
 	if err != nil {
 		return []metav1.APIGroup{}, err
 	}
