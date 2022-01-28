@@ -16,6 +16,13 @@ limitations under the License.
 
 package cache
 
+import (
+	"errors"
+	"fmt"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
 // GlobalConfig contains global configuration for caches, indexers, keys, etc.
 type GlobalConfig struct {
 	// ObjectKeyFunc is the global KeyFunc.
@@ -41,18 +48,22 @@ var (
 	// globalConfigSet is a channel that guards against multiple attempts to set the global configuration.
 	globalConfigSet = make(chan struct{})
 
-	// globalConfig contains the global configuration. Initial default values suitable for most use cases
-	// are configured here.
-	globalConfig = &completedGlobalConfig{
-		GlobalConfig: GlobalConfig{
+	// globalConfig contains the global configuration.
+	globalConfig *completedGlobalConfig
+)
+
+func init() {
+	// Set and validate defaults
+	setGlobalConfig(
+		GlobalConfig{
 			ObjectKeyFunc:        DeletionHandlingMetaNamespaceKeyFunc,
 			DecodeKeyFunc:        DecodeMetaNamespaceKey,
 			NamespaceIndexFunc:   MetaNamespaceIndexFunc,
 			NamespaceNameKeyFunc: namespaceNameToKey,
 			ScopeFromKeyFunc:     unnamedScopeFromKey,
 		},
-	}
-)
+	)
+}
 
 // SetGlobalConfig sets the global cache configuration. It may only be called once. Subsequent invocations
 // will panic.
@@ -60,6 +71,33 @@ func SetGlobalConfig(c GlobalConfig) {
 	// This will panic if called twice
 	close(globalConfigSet)
 
+	// Set and validate
+	setGlobalConfig(c)
+}
+
+func setGlobalConfig(c GlobalConfig) {
+	// Validate consistency
+	namespace := "my-namespace"
+	name := "my-name"
+
+	objectKey, err := c.ObjectKeyFunc(&metav1.ObjectMeta{Namespace: namespace, Name: name})
+	if err != nil {
+		panic(fmt.Errorf("ObjectKeyFunc is broken: %w", err))
+	}
+	if objectKey == "" {
+		panic(errors.New("ObjectKeyFunc generated an empty key"))
+	}
+
+	namespaceNameKey := c.NamespaceNameKeyFunc(namespace, name)
+	if namespaceNameKey == "" {
+		panic(errors.New("NamespaceNameKeyFunc generated an empty key"))
+	}
+
+	if objectKey != namespaceNameKey {
+		panic(fmt.Errorf("ObjectKeyFunc and NamespaceNameKeyFunc mismatch: %q vs %q", objectKey, namespaceNameKey))
+	}
+
+	// Passed validation!
 	globalConfig = &completedGlobalConfig{
 		GlobalConfig: c,
 	}
