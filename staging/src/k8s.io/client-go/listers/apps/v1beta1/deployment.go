@@ -22,12 +22,14 @@ import (
 	v1beta1 "k8s.io/api/apps/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // DeploymentLister helps list Deployments.
 // All objects returned here must be treated as read-only.
 type DeploymentLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) DeploymentLister
 	// List lists all Deployments in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta1.Deployment, err error)
@@ -39,6 +41,7 @@ type DeploymentLister interface {
 // deploymentLister implements the DeploymentLister interface.
 type deploymentLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewDeploymentLister returns a new DeploymentLister.
@@ -46,11 +49,27 @@ func NewDeploymentLister(indexer cache.Indexer) DeploymentLister {
 	return &deploymentLister{indexer: indexer}
 }
 
+func (s *deploymentLister) Scope(scope cache.Scope) DeploymentLister {
+	return &deploymentLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all Deployments in the indexer.
 func (s *deploymentLister) List(selector labels.Selector) (ret []*v1beta1.Deployment, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1beta1.Deployment))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 
@@ -75,12 +94,17 @@ type DeploymentNamespaceLister interface {
 // interface.
 type deploymentNamespaceLister struct {
 	indexer   cache.Indexer
+	scope     cache.Scope
 	namespace string
 }
 
 // List lists all Deployments in the indexer for a given namespace.
 func (s deploymentNamespaceLister) List(selector labels.Selector) (ret []*v1beta1.Deployment, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+	indexValue := s.namespace
+	if s.scope != nil {
+		indexValue = s.scope.CacheKey(s.namespace)
+	}
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.NamespaceIndex, indexValue, selector, func(m interface{}) {
 		ret = append(ret, m.(*v1beta1.Deployment))
 	})
 	return ret, err
@@ -88,7 +112,11 @@ func (s deploymentNamespaceLister) List(selector labels.Selector) (ret []*v1beta
 
 // Get retrieves the Deployment from the indexer for a given namespace and name.
 func (s deploymentNamespaceLister) Get(name string) (*v1beta1.Deployment, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+	key := cache.NamespaceNameKey(s.namespace, name)
+	if s.scope != nil {
+		key = s.scope.CacheKey(key)
+	}
+	obj, exists, err := s.indexer.GetByKey(key)
 	if err != nil {
 		return nil, err
 	}

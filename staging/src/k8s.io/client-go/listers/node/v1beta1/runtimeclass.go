@@ -22,12 +22,14 @@ import (
 	v1beta1 "k8s.io/api/node/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // RuntimeClassLister helps list RuntimeClasses.
 // All objects returned here must be treated as read-only.
 type RuntimeClassLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) RuntimeClassLister
 	// List lists all RuntimeClasses in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta1.RuntimeClass, err error)
@@ -40,6 +42,7 @@ type RuntimeClassLister interface {
 // runtimeClassLister implements the RuntimeClassLister interface.
 type runtimeClassLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewRuntimeClassLister returns a new RuntimeClassLister.
@@ -47,11 +50,27 @@ func NewRuntimeClassLister(indexer cache.Indexer) RuntimeClassLister {
 	return &runtimeClassLister{indexer: indexer}
 }
 
+func (s *runtimeClassLister) Scope(scope cache.Scope) RuntimeClassLister {
+	return &runtimeClassLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all RuntimeClasses in the indexer.
 func (s *runtimeClassLister) List(selector labels.Selector) (ret []*v1beta1.RuntimeClass, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1beta1.RuntimeClass))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

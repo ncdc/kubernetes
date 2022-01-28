@@ -22,12 +22,14 @@ import (
 	v1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // MutatingWebhookConfigurationLister helps list MutatingWebhookConfigurations.
 // All objects returned here must be treated as read-only.
 type MutatingWebhookConfigurationLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) MutatingWebhookConfigurationLister
 	// List lists all MutatingWebhookConfigurations in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta1.MutatingWebhookConfiguration, err error)
@@ -40,6 +42,7 @@ type MutatingWebhookConfigurationLister interface {
 // mutatingWebhookConfigurationLister implements the MutatingWebhookConfigurationLister interface.
 type mutatingWebhookConfigurationLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewMutatingWebhookConfigurationLister returns a new MutatingWebhookConfigurationLister.
@@ -47,11 +50,27 @@ func NewMutatingWebhookConfigurationLister(indexer cache.Indexer) MutatingWebhoo
 	return &mutatingWebhookConfigurationLister{indexer: indexer}
 }
 
+func (s *mutatingWebhookConfigurationLister) Scope(scope cache.Scope) MutatingWebhookConfigurationLister {
+	return &mutatingWebhookConfigurationLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all MutatingWebhookConfigurations in the indexer.
 func (s *mutatingWebhookConfigurationLister) List(selector labels.Selector) (ret []*v1beta1.MutatingWebhookConfiguration, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1beta1.MutatingWebhookConfiguration))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

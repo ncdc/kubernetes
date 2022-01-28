@@ -22,12 +22,14 @@ import (
 	v1alpha1 "k8s.io/api/apiserverinternal/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // StorageVersionLister helps list StorageVersions.
 // All objects returned here must be treated as read-only.
 type StorageVersionLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) StorageVersionLister
 	// List lists all StorageVersions in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.StorageVersion, err error)
@@ -40,6 +42,7 @@ type StorageVersionLister interface {
 // storageVersionLister implements the StorageVersionLister interface.
 type storageVersionLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewStorageVersionLister returns a new StorageVersionLister.
@@ -47,11 +50,27 @@ func NewStorageVersionLister(indexer cache.Indexer) StorageVersionLister {
 	return &storageVersionLister{indexer: indexer}
 }
 
+func (s *storageVersionLister) Scope(scope cache.Scope) StorageVersionLister {
+	return &storageVersionLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all StorageVersions in the indexer.
 func (s *storageVersionLister) List(selector labels.Selector) (ret []*v1alpha1.StorageVersion, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1alpha1.StorageVersion))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

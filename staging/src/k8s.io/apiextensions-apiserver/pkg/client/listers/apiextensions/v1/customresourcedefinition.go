@@ -22,12 +22,14 @@ import (
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // CustomResourceDefinitionLister helps list CustomResourceDefinitions.
 // All objects returned here must be treated as read-only.
 type CustomResourceDefinitionLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) CustomResourceDefinitionLister
 	// List lists all CustomResourceDefinitions in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.CustomResourceDefinition, err error)
@@ -40,6 +42,7 @@ type CustomResourceDefinitionLister interface {
 // customResourceDefinitionLister implements the CustomResourceDefinitionLister interface.
 type customResourceDefinitionLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewCustomResourceDefinitionLister returns a new CustomResourceDefinitionLister.
@@ -47,11 +50,27 @@ func NewCustomResourceDefinitionLister(indexer cache.Indexer) CustomResourceDefi
 	return &customResourceDefinitionLister{indexer: indexer}
 }
 
+func (s *customResourceDefinitionLister) Scope(scope cache.Scope) CustomResourceDefinitionLister {
+	return &customResourceDefinitionLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all CustomResourceDefinitions in the indexer.
 func (s *customResourceDefinitionLister) List(selector labels.Selector) (ret []*v1.CustomResourceDefinition, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1.CustomResourceDefinition))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

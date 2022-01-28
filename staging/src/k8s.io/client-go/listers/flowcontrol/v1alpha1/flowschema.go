@@ -22,12 +22,14 @@ import (
 	v1alpha1 "k8s.io/api/flowcontrol/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // FlowSchemaLister helps list FlowSchemas.
 // All objects returned here must be treated as read-only.
 type FlowSchemaLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) FlowSchemaLister
 	// List lists all FlowSchemas in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.FlowSchema, err error)
@@ -40,6 +42,7 @@ type FlowSchemaLister interface {
 // flowSchemaLister implements the FlowSchemaLister interface.
 type flowSchemaLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewFlowSchemaLister returns a new FlowSchemaLister.
@@ -47,11 +50,27 @@ func NewFlowSchemaLister(indexer cache.Indexer) FlowSchemaLister {
 	return &flowSchemaLister{indexer: indexer}
 }
 
+func (s *flowSchemaLister) Scope(scope cache.Scope) FlowSchemaLister {
+	return &flowSchemaLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all FlowSchemas in the indexer.
 func (s *flowSchemaLister) List(selector labels.Selector) (ret []*v1alpha1.FlowSchema, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1alpha1.FlowSchema))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

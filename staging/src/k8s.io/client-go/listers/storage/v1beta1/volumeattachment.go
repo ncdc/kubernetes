@@ -22,12 +22,14 @@ import (
 	v1beta1 "k8s.io/api/storage/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // VolumeAttachmentLister helps list VolumeAttachments.
 // All objects returned here must be treated as read-only.
 type VolumeAttachmentLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) VolumeAttachmentLister
 	// List lists all VolumeAttachments in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta1.VolumeAttachment, err error)
@@ -40,6 +42,7 @@ type VolumeAttachmentLister interface {
 // volumeAttachmentLister implements the VolumeAttachmentLister interface.
 type volumeAttachmentLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewVolumeAttachmentLister returns a new VolumeAttachmentLister.
@@ -47,11 +50,27 @@ func NewVolumeAttachmentLister(indexer cache.Indexer) VolumeAttachmentLister {
 	return &volumeAttachmentLister{indexer: indexer}
 }
 
+func (s *volumeAttachmentLister) Scope(scope cache.Scope) VolumeAttachmentLister {
+	return &volumeAttachmentLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all VolumeAttachments in the indexer.
 func (s *volumeAttachmentLister) List(selector labels.Selector) (ret []*v1beta1.VolumeAttachment, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1beta1.VolumeAttachment))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

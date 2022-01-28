@@ -22,12 +22,14 @@ import (
 	v1beta1 "k8s.io/api/flowcontrol/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // PriorityLevelConfigurationLister helps list PriorityLevelConfigurations.
 // All objects returned here must be treated as read-only.
 type PriorityLevelConfigurationLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) PriorityLevelConfigurationLister
 	// List lists all PriorityLevelConfigurations in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta1.PriorityLevelConfiguration, err error)
@@ -40,6 +42,7 @@ type PriorityLevelConfigurationLister interface {
 // priorityLevelConfigurationLister implements the PriorityLevelConfigurationLister interface.
 type priorityLevelConfigurationLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewPriorityLevelConfigurationLister returns a new PriorityLevelConfigurationLister.
@@ -47,11 +50,27 @@ func NewPriorityLevelConfigurationLister(indexer cache.Indexer) PriorityLevelCon
 	return &priorityLevelConfigurationLister{indexer: indexer}
 }
 
+func (s *priorityLevelConfigurationLister) Scope(scope cache.Scope) PriorityLevelConfigurationLister {
+	return &priorityLevelConfigurationLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all PriorityLevelConfigurations in the indexer.
 func (s *priorityLevelConfigurationLister) List(selector labels.Selector) (ret []*v1beta1.PriorityLevelConfiguration, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1beta1.PriorityLevelConfiguration))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

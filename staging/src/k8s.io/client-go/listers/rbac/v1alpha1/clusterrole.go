@@ -22,12 +22,14 @@ import (
 	v1alpha1 "k8s.io/api/rbac/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // ClusterRoleLister helps list ClusterRoles.
 // All objects returned here must be treated as read-only.
 type ClusterRoleLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) ClusterRoleLister
 	// List lists all ClusterRoles in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ClusterRole, err error)
@@ -40,6 +42,7 @@ type ClusterRoleLister interface {
 // clusterRoleLister implements the ClusterRoleLister interface.
 type clusterRoleLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewClusterRoleLister returns a new ClusterRoleLister.
@@ -47,11 +50,27 @@ func NewClusterRoleLister(indexer cache.Indexer) ClusterRoleLister {
 	return &clusterRoleLister{indexer: indexer}
 }
 
+func (s *clusterRoleLister) Scope(scope cache.Scope) ClusterRoleLister {
+	return &clusterRoleLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all ClusterRoles in the indexer.
 func (s *clusterRoleLister) List(selector labels.Selector) (ret []*v1alpha1.ClusterRole, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1alpha1.ClusterRole))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

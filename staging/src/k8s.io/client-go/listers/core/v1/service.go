@@ -22,12 +22,14 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // ServiceLister helps list Services.
 // All objects returned here must be treated as read-only.
 type ServiceLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) ServiceLister
 	// List lists all Services in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.Service, err error)
@@ -39,6 +41,7 @@ type ServiceLister interface {
 // serviceLister implements the ServiceLister interface.
 type serviceLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewServiceLister returns a new ServiceLister.
@@ -46,11 +49,27 @@ func NewServiceLister(indexer cache.Indexer) ServiceLister {
 	return &serviceLister{indexer: indexer}
 }
 
+func (s *serviceLister) Scope(scope cache.Scope) ServiceLister {
+	return &serviceLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all Services in the indexer.
 func (s *serviceLister) List(selector labels.Selector) (ret []*v1.Service, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1.Service))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 
@@ -75,12 +94,17 @@ type ServiceNamespaceLister interface {
 // interface.
 type serviceNamespaceLister struct {
 	indexer   cache.Indexer
+	scope     cache.Scope
 	namespace string
 }
 
 // List lists all Services in the indexer for a given namespace.
 func (s serviceNamespaceLister) List(selector labels.Selector) (ret []*v1.Service, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+	indexValue := s.namespace
+	if s.scope != nil {
+		indexValue = s.scope.CacheKey(s.namespace)
+	}
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.NamespaceIndex, indexValue, selector, func(m interface{}) {
 		ret = append(ret, m.(*v1.Service))
 	})
 	return ret, err
@@ -88,7 +112,11 @@ func (s serviceNamespaceLister) List(selector labels.Selector) (ret []*v1.Servic
 
 // Get retrieves the Service from the indexer for a given namespace and name.
 func (s serviceNamespaceLister) Get(name string) (*v1.Service, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+	key := cache.NamespaceNameKey(s.namespace, name)
+	if s.scope != nil {
+		key = s.scope.CacheKey(key)
+	}
+	obj, exists, err := s.indexer.GetByKey(key)
 	if err != nil {
 		return nil, err
 	}

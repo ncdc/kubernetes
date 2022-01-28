@@ -22,12 +22,14 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // SecretLister helps list Secrets.
 // All objects returned here must be treated as read-only.
 type SecretLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) SecretLister
 	// List lists all Secrets in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.Secret, err error)
@@ -39,6 +41,7 @@ type SecretLister interface {
 // secretLister implements the SecretLister interface.
 type secretLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewSecretLister returns a new SecretLister.
@@ -46,11 +49,27 @@ func NewSecretLister(indexer cache.Indexer) SecretLister {
 	return &secretLister{indexer: indexer}
 }
 
+func (s *secretLister) Scope(scope cache.Scope) SecretLister {
+	return &secretLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all Secrets in the indexer.
 func (s *secretLister) List(selector labels.Selector) (ret []*v1.Secret, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1.Secret))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 
@@ -75,12 +94,17 @@ type SecretNamespaceLister interface {
 // interface.
 type secretNamespaceLister struct {
 	indexer   cache.Indexer
+	scope     cache.Scope
 	namespace string
 }
 
 // List lists all Secrets in the indexer for a given namespace.
 func (s secretNamespaceLister) List(selector labels.Selector) (ret []*v1.Secret, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+	indexValue := s.namespace
+	if s.scope != nil {
+		indexValue = s.scope.CacheKey(s.namespace)
+	}
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.NamespaceIndex, indexValue, selector, func(m interface{}) {
 		ret = append(ret, m.(*v1.Secret))
 	})
 	return ret, err
@@ -88,7 +112,11 @@ func (s secretNamespaceLister) List(selector labels.Selector) (ret []*v1.Secret,
 
 // Get retrieves the Secret from the indexer for a given namespace and name.
 func (s secretNamespaceLister) Get(name string) (*v1.Secret, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+	key := cache.NamespaceNameKey(s.namespace, name)
+	if s.scope != nil {
+		key = s.scope.CacheKey(key)
+	}
+	obj, exists, err := s.indexer.GetByKey(key)
 	if err != nil {
 		return nil, err
 	}

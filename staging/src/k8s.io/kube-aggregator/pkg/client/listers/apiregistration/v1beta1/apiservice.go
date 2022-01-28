@@ -21,13 +21,15 @@ package v1beta1
 import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 	v1beta1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1beta1"
 )
 
 // APIServiceLister helps list APIServices.
 // All objects returned here must be treated as read-only.
 type APIServiceLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) APIServiceLister
 	// List lists all APIServices in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta1.APIService, err error)
@@ -40,6 +42,7 @@ type APIServiceLister interface {
 // aPIServiceLister implements the APIServiceLister interface.
 type aPIServiceLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewAPIServiceLister returns a new APIServiceLister.
@@ -47,11 +50,27 @@ func NewAPIServiceLister(indexer cache.Indexer) APIServiceLister {
 	return &aPIServiceLister{indexer: indexer}
 }
 
+func (s *aPIServiceLister) Scope(scope cache.Scope) APIServiceLister {
+	return &aPIServiceLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all APIServices in the indexer.
 func (s *aPIServiceLister) List(selector labels.Selector) (ret []*v1beta1.APIService, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1beta1.APIService))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

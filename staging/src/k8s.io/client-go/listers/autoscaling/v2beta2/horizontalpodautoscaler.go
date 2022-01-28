@@ -22,12 +22,14 @@ import (
 	v2beta2 "k8s.io/api/autoscaling/v2beta2"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // HorizontalPodAutoscalerLister helps list HorizontalPodAutoscalers.
 // All objects returned here must be treated as read-only.
 type HorizontalPodAutoscalerLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) HorizontalPodAutoscalerLister
 	// List lists all HorizontalPodAutoscalers in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v2beta2.HorizontalPodAutoscaler, err error)
@@ -39,6 +41,7 @@ type HorizontalPodAutoscalerLister interface {
 // horizontalPodAutoscalerLister implements the HorizontalPodAutoscalerLister interface.
 type horizontalPodAutoscalerLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewHorizontalPodAutoscalerLister returns a new HorizontalPodAutoscalerLister.
@@ -46,11 +49,27 @@ func NewHorizontalPodAutoscalerLister(indexer cache.Indexer) HorizontalPodAutosc
 	return &horizontalPodAutoscalerLister{indexer: indexer}
 }
 
+func (s *horizontalPodAutoscalerLister) Scope(scope cache.Scope) HorizontalPodAutoscalerLister {
+	return &horizontalPodAutoscalerLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all HorizontalPodAutoscalers in the indexer.
 func (s *horizontalPodAutoscalerLister) List(selector labels.Selector) (ret []*v2beta2.HorizontalPodAutoscaler, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v2beta2.HorizontalPodAutoscaler))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 
@@ -75,12 +94,17 @@ type HorizontalPodAutoscalerNamespaceLister interface {
 // interface.
 type horizontalPodAutoscalerNamespaceLister struct {
 	indexer   cache.Indexer
+	scope     cache.Scope
 	namespace string
 }
 
 // List lists all HorizontalPodAutoscalers in the indexer for a given namespace.
 func (s horizontalPodAutoscalerNamespaceLister) List(selector labels.Selector) (ret []*v2beta2.HorizontalPodAutoscaler, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+	indexValue := s.namespace
+	if s.scope != nil {
+		indexValue = s.scope.CacheKey(s.namespace)
+	}
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.NamespaceIndex, indexValue, selector, func(m interface{}) {
 		ret = append(ret, m.(*v2beta2.HorizontalPodAutoscaler))
 	})
 	return ret, err
@@ -88,7 +112,11 @@ func (s horizontalPodAutoscalerNamespaceLister) List(selector labels.Selector) (
 
 // Get retrieves the HorizontalPodAutoscaler from the indexer for a given namespace and name.
 func (s horizontalPodAutoscalerNamespaceLister) Get(name string) (*v2beta2.HorizontalPodAutoscaler, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+	key := cache.NamespaceNameKey(s.namespace, name)
+	if s.scope != nil {
+		key = s.scope.CacheKey(key)
+	}
+	obj, exists, err := s.indexer.GetByKey(key)
 	if err != nil {
 		return nil, err
 	}

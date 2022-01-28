@@ -22,12 +22,14 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // ComponentStatusLister helps list ComponentStatuses.
 // All objects returned here must be treated as read-only.
 type ComponentStatusLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) ComponentStatusLister
 	// List lists all ComponentStatuses in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.ComponentStatus, err error)
@@ -40,6 +42,7 @@ type ComponentStatusLister interface {
 // componentStatusLister implements the ComponentStatusLister interface.
 type componentStatusLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewComponentStatusLister returns a new ComponentStatusLister.
@@ -47,11 +50,27 @@ func NewComponentStatusLister(indexer cache.Indexer) ComponentStatusLister {
 	return &componentStatusLister{indexer: indexer}
 }
 
+func (s *componentStatusLister) Scope(scope cache.Scope) ComponentStatusLister {
+	return &componentStatusLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all ComponentStatuses in the indexer.
 func (s *componentStatusLister) List(selector labels.Selector) (ret []*v1.ComponentStatus, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1.ComponentStatus))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

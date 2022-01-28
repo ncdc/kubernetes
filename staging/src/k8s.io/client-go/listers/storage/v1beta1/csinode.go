@@ -22,12 +22,14 @@ import (
 	v1beta1 "k8s.io/api/storage/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // CSINodeLister helps list CSINodes.
 // All objects returned here must be treated as read-only.
 type CSINodeLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) CSINodeLister
 	// List lists all CSINodes in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta1.CSINode, err error)
@@ -40,6 +42,7 @@ type CSINodeLister interface {
 // cSINodeLister implements the CSINodeLister interface.
 type cSINodeLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewCSINodeLister returns a new CSINodeLister.
@@ -47,11 +50,27 @@ func NewCSINodeLister(indexer cache.Indexer) CSINodeLister {
 	return &cSINodeLister{indexer: indexer}
 }
 
+func (s *cSINodeLister) Scope(scope cache.Scope) CSINodeLister {
+	return &cSINodeLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all CSINodes in the indexer.
 func (s *cSINodeLister) List(selector labels.Selector) (ret []*v1beta1.CSINode, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1beta1.CSINode))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

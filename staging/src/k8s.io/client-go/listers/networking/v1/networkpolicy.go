@@ -22,12 +22,14 @@ import (
 	v1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // NetworkPolicyLister helps list NetworkPolicies.
 // All objects returned here must be treated as read-only.
 type NetworkPolicyLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) NetworkPolicyLister
 	// List lists all NetworkPolicies in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.NetworkPolicy, err error)
@@ -39,6 +41,7 @@ type NetworkPolicyLister interface {
 // networkPolicyLister implements the NetworkPolicyLister interface.
 type networkPolicyLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewNetworkPolicyLister returns a new NetworkPolicyLister.
@@ -46,11 +49,27 @@ func NewNetworkPolicyLister(indexer cache.Indexer) NetworkPolicyLister {
 	return &networkPolicyLister{indexer: indexer}
 }
 
+func (s *networkPolicyLister) Scope(scope cache.Scope) NetworkPolicyLister {
+	return &networkPolicyLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all NetworkPolicies in the indexer.
 func (s *networkPolicyLister) List(selector labels.Selector) (ret []*v1.NetworkPolicy, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1.NetworkPolicy))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 
@@ -75,12 +94,17 @@ type NetworkPolicyNamespaceLister interface {
 // interface.
 type networkPolicyNamespaceLister struct {
 	indexer   cache.Indexer
+	scope     cache.Scope
 	namespace string
 }
 
 // List lists all NetworkPolicies in the indexer for a given namespace.
 func (s networkPolicyNamespaceLister) List(selector labels.Selector) (ret []*v1.NetworkPolicy, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+	indexValue := s.namespace
+	if s.scope != nil {
+		indexValue = s.scope.CacheKey(s.namespace)
+	}
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.NamespaceIndex, indexValue, selector, func(m interface{}) {
 		ret = append(ret, m.(*v1.NetworkPolicy))
 	})
 	return ret, err
@@ -88,7 +112,11 @@ func (s networkPolicyNamespaceLister) List(selector labels.Selector) (ret []*v1.
 
 // Get retrieves the NetworkPolicy from the indexer for a given namespace and name.
 func (s networkPolicyNamespaceLister) Get(name string) (*v1.NetworkPolicy, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+	key := cache.NamespaceNameKey(s.namespace, name)
+	if s.scope != nil {
+		key = s.scope.CacheKey(key)
+	}
+	obj, exists, err := s.indexer.GetByKey(key)
 	if err != nil {
 		return nil, err
 	}
