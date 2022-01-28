@@ -27,6 +27,9 @@ type GlobalConfig struct {
 	NamespaceIndexFunc IndexFunc
 	// NamespaceNameKeyFunc is the global function that encodes a namespace and a name as a single key as a string.
 	NamespaceNameKeyFunc func(namespace, name string) string
+
+	// ScopeFromKeyFunc is the global ScopeFromKeyFunc.
+	ScopeFromKeyFunc ScopeFromKeyFunc
 }
 
 // completedGlobalConfig is private to protect against direct access/modifications by consumers outside this package.
@@ -46,6 +49,7 @@ var (
 			DecodeKeyFunc:        DecodeMetaNamespaceKey,
 			NamespaceIndexFunc:   MetaNamespaceIndexFunc,
 			NamespaceNameKeyFunc: namespaceNameToKey,
+			ScopeFromKeyFunc:     unnamedScopeFromKey,
 		},
 	}
 )
@@ -79,4 +83,9 @@ func NamespaceIndexFunc() IndexFunc {
 // NamespaceNameKey encodes namespace and name into a key as a string using the global NamespaceNameKeyFunc.
 func NamespaceNameKey(namespace, name string) string {
 	return globalConfig.NamespaceNameKeyFunc(namespace, name)
+}
+
+// ScopeFromKey returns the Scope for key using the global ScopeFromKeyFunc.
+func ScopeFromKey(key string) (Scope, error) {
+	return globalConfig.ScopeFromKeyFunc(key)
 }
