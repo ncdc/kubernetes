@@ -21,13 +21,15 @@ package v1alpha1
 import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 	v1alpha1 "k8s.io/sample-apiserver/pkg/apis/wardle/v1alpha1"
 )
 
 // FischerLister helps list Fischers.
 // All objects returned here must be treated as read-only.
 type FischerLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) FischerLister
 	// List lists all Fischers in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.Fischer, err error)
@@ -40,6 +42,7 @@ type FischerLister interface {
 // fischerLister implements the FischerLister interface.
 type fischerLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewFischerLister returns a new FischerLister.
@@ -47,11 +50,27 @@ func NewFischerLister(indexer cache.Indexer) FischerLister {
 	return &fischerLister{indexer: indexer}
 }
 
+func (s *fischerLister) Scope(scope cache.Scope) FischerLister {
+	return &fischerLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all Fischers in the indexer.
 func (s *fischerLister) List(selector labels.Selector) (ret []*v1alpha1.Fischer, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1alpha1.Fischer))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

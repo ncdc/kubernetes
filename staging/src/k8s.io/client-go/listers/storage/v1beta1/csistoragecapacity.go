@@ -22,12 +22,14 @@ import (
 	v1beta1 "k8s.io/api/storage/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // CSIStorageCapacityLister helps list CSIStorageCapacities.
 // All objects returned here must be treated as read-only.
 type CSIStorageCapacityLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) CSIStorageCapacityLister
 	// List lists all CSIStorageCapacities in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta1.CSIStorageCapacity, err error)
@@ -39,6 +41,7 @@ type CSIStorageCapacityLister interface {
 // cSIStorageCapacityLister implements the CSIStorageCapacityLister interface.
 type cSIStorageCapacityLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewCSIStorageCapacityLister returns a new CSIStorageCapacityLister.
@@ -46,11 +49,27 @@ func NewCSIStorageCapacityLister(indexer cache.Indexer) CSIStorageCapacityLister
 	return &cSIStorageCapacityLister{indexer: indexer}
 }
 
+func (s *cSIStorageCapacityLister) Scope(scope cache.Scope) CSIStorageCapacityLister {
+	return &cSIStorageCapacityLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all CSIStorageCapacities in the indexer.
 func (s *cSIStorageCapacityLister) List(selector labels.Selector) (ret []*v1beta1.CSIStorageCapacity, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1beta1.CSIStorageCapacity))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 
@@ -75,12 +94,17 @@ type CSIStorageCapacityNamespaceLister interface {
 // interface.
 type cSIStorageCapacityNamespaceLister struct {
 	indexer   cache.Indexer
+	scope     cache.Scope
 	namespace string
 }
 
 // List lists all CSIStorageCapacities in the indexer for a given namespace.
 func (s cSIStorageCapacityNamespaceLister) List(selector labels.Selector) (ret []*v1beta1.CSIStorageCapacity, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+	indexValue := s.namespace
+	if s.scope != nil {
+		indexValue = s.scope.CacheKey(s.namespace)
+	}
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.NamespaceIndex, indexValue, selector, func(m interface{}) {
 		ret = append(ret, m.(*v1beta1.CSIStorageCapacity))
 	})
 	return ret, err
@@ -88,7 +112,11 @@ func (s cSIStorageCapacityNamespaceLister) List(selector labels.Selector) (ret [
 
 // Get retrieves the CSIStorageCapacity from the indexer for a given namespace and name.
 func (s cSIStorageCapacityNamespaceLister) Get(name string) (*v1beta1.CSIStorageCapacity, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+	key := cache.NamespaceNameKey(s.namespace, name)
+	if s.scope != nil {
+		key = s.scope.CacheKey(key)
+	}
+	obj, exists, err := s.indexer.GetByKey(key)
 	if err != nil {
 		return nil, err
 	}

@@ -22,12 +22,14 @@ import (
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // DaemonSetLister helps list DaemonSets.
 // All objects returned here must be treated as read-only.
 type DaemonSetLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) DaemonSetLister
 	// List lists all DaemonSets in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.DaemonSet, err error)
@@ -39,6 +41,7 @@ type DaemonSetLister interface {
 // daemonSetLister implements the DaemonSetLister interface.
 type daemonSetLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewDaemonSetLister returns a new DaemonSetLister.
@@ -46,11 +49,27 @@ func NewDaemonSetLister(indexer cache.Indexer) DaemonSetLister {
 	return &daemonSetLister{indexer: indexer}
 }
 
+func (s *daemonSetLister) Scope(scope cache.Scope) DaemonSetLister {
+	return &daemonSetLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all DaemonSets in the indexer.
 func (s *daemonSetLister) List(selector labels.Selector) (ret []*v1.DaemonSet, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1.DaemonSet))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 
@@ -75,12 +94,17 @@ type DaemonSetNamespaceLister interface {
 // interface.
 type daemonSetNamespaceLister struct {
 	indexer   cache.Indexer
+	scope     cache.Scope
 	namespace string
 }
 
 // List lists all DaemonSets in the indexer for a given namespace.
 func (s daemonSetNamespaceLister) List(selector labels.Selector) (ret []*v1.DaemonSet, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+	indexValue := s.namespace
+	if s.scope != nil {
+		indexValue = s.scope.CacheKey(s.namespace)
+	}
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.NamespaceIndex, indexValue, selector, func(m interface{}) {
 		ret = append(ret, m.(*v1.DaemonSet))
 	})
 	return ret, err
@@ -88,7 +112,11 @@ func (s daemonSetNamespaceLister) List(selector labels.Selector) (ret []*v1.Daem
 
 // Get retrieves the DaemonSet from the indexer for a given namespace and name.
 func (s daemonSetNamespaceLister) Get(name string) (*v1.DaemonSet, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+	key := cache.NamespaceNameKey(s.namespace, name)
+	if s.scope != nil {
+		key = s.scope.CacheKey(key)
+	}
+	obj, exists, err := s.indexer.GetByKey(key)
 	if err != nil {
 		return nil, err
 	}

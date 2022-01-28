@@ -22,12 +22,14 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // NamespaceLister helps list Namespaces.
 // All objects returned here must be treated as read-only.
 type NamespaceLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) NamespaceLister
 	// List lists all Namespaces in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.Namespace, err error)
@@ -40,6 +42,7 @@ type NamespaceLister interface {
 // namespaceLister implements the NamespaceLister interface.
 type namespaceLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewNamespaceLister returns a new NamespaceLister.
@@ -47,11 +50,27 @@ func NewNamespaceLister(indexer cache.Indexer) NamespaceLister {
 	return &namespaceLister{indexer: indexer}
 }
 
+func (s *namespaceLister) Scope(scope cache.Scope) NamespaceLister {
+	return &namespaceLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all Namespaces in the indexer.
 func (s *namespaceLister) List(selector labels.Selector) (ret []*v1.Namespace, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1.Namespace))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

@@ -22,12 +22,14 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // PodLister helps list Pods.
 // All objects returned here must be treated as read-only.
 type PodLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) PodLister
 	// List lists all Pods in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.Pod, err error)
@@ -39,6 +41,7 @@ type PodLister interface {
 // podLister implements the PodLister interface.
 type podLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewPodLister returns a new PodLister.
@@ -46,11 +49,27 @@ func NewPodLister(indexer cache.Indexer) PodLister {
 	return &podLister{indexer: indexer}
 }
 
+func (s *podLister) Scope(scope cache.Scope) PodLister {
+	return &podLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all Pods in the indexer.
 func (s *podLister) List(selector labels.Selector) (ret []*v1.Pod, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1.Pod))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 
@@ -75,12 +94,17 @@ type PodNamespaceLister interface {
 // interface.
 type podNamespaceLister struct {
 	indexer   cache.Indexer
+	scope     cache.Scope
 	namespace string
 }
 
 // List lists all Pods in the indexer for a given namespace.
 func (s podNamespaceLister) List(selector labels.Selector) (ret []*v1.Pod, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+	indexValue := s.namespace
+	if s.scope != nil {
+		indexValue = s.scope.CacheKey(s.namespace)
+	}
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.NamespaceIndex, indexValue, selector, func(m interface{}) {
 		ret = append(ret, m.(*v1.Pod))
 	})
 	return ret, err
@@ -88,7 +112,11 @@ func (s podNamespaceLister) List(selector labels.Selector) (ret []*v1.Pod, err e
 
 // Get retrieves the Pod from the indexer for a given namespace and name.
 func (s podNamespaceLister) Get(name string) (*v1.Pod, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+	key := cache.NamespaceNameKey(s.namespace, name)
+	if s.scope != nil {
+		key = s.scope.CacheKey(key)
+	}
+	obj, exists, err := s.indexer.GetByKey(key)
 	if err != nil {
 		return nil, err
 	}

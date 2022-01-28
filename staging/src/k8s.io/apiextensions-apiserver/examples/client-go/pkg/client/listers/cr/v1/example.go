@@ -22,12 +22,14 @@ import (
 	v1 "k8s.io/apiextensions-apiserver/examples/client-go/pkg/apis/cr/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // ExampleLister helps list Examples.
 // All objects returned here must be treated as read-only.
 type ExampleLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) ExampleLister
 	// List lists all Examples in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.Example, err error)
@@ -39,6 +41,7 @@ type ExampleLister interface {
 // exampleLister implements the ExampleLister interface.
 type exampleLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewExampleLister returns a new ExampleLister.
@@ -46,11 +49,27 @@ func NewExampleLister(indexer cache.Indexer) ExampleLister {
 	return &exampleLister{indexer: indexer}
 }
 
+func (s *exampleLister) Scope(scope cache.Scope) ExampleLister {
+	return &exampleLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all Examples in the indexer.
 func (s *exampleLister) List(selector labels.Selector) (ret []*v1.Example, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1.Example))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 
@@ -75,12 +94,17 @@ type ExampleNamespaceLister interface {
 // interface.
 type exampleNamespaceLister struct {
 	indexer   cache.Indexer
+	scope     cache.Scope
 	namespace string
 }
 
 // List lists all Examples in the indexer for a given namespace.
 func (s exampleNamespaceLister) List(selector labels.Selector) (ret []*v1.Example, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+	indexValue := s.namespace
+	if s.scope != nil {
+		indexValue = s.scope.CacheKey(s.namespace)
+	}
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.NamespaceIndex, indexValue, selector, func(m interface{}) {
 		ret = append(ret, m.(*v1.Example))
 	})
 	return ret, err
@@ -88,7 +112,11 @@ func (s exampleNamespaceLister) List(selector labels.Selector) (ret []*v1.Exampl
 
 // Get retrieves the Example from the indexer for a given namespace and name.
 func (s exampleNamespaceLister) Get(name string) (*v1.Example, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+	key := cache.NamespaceNameKey(s.namespace, name)
+	if s.scope != nil {
+		key = s.scope.CacheKey(key)
+	}
+	obj, exists, err := s.indexer.GetByKey(key)
 	if err != nil {
 		return nil, err
 	}

@@ -22,12 +22,14 @@ import (
 	v1beta1 "k8s.io/api/rbac/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // RoleLister helps list Roles.
 // All objects returned here must be treated as read-only.
 type RoleLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) RoleLister
 	// List lists all Roles in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta1.Role, err error)
@@ -39,6 +41,7 @@ type RoleLister interface {
 // roleLister implements the RoleLister interface.
 type roleLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewRoleLister returns a new RoleLister.
@@ -46,11 +49,27 @@ func NewRoleLister(indexer cache.Indexer) RoleLister {
 	return &roleLister{indexer: indexer}
 }
 
+func (s *roleLister) Scope(scope cache.Scope) RoleLister {
+	return &roleLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all Roles in the indexer.
 func (s *roleLister) List(selector labels.Selector) (ret []*v1beta1.Role, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1beta1.Role))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 
@@ -75,12 +94,17 @@ type RoleNamespaceLister interface {
 // interface.
 type roleNamespaceLister struct {
 	indexer   cache.Indexer
+	scope     cache.Scope
 	namespace string
 }
 
 // List lists all Roles in the indexer for a given namespace.
 func (s roleNamespaceLister) List(selector labels.Selector) (ret []*v1beta1.Role, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+	indexValue := s.namespace
+	if s.scope != nil {
+		indexValue = s.scope.CacheKey(s.namespace)
+	}
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.NamespaceIndex, indexValue, selector, func(m interface{}) {
 		ret = append(ret, m.(*v1beta1.Role))
 	})
 	return ret, err
@@ -88,7 +112,11 @@ func (s roleNamespaceLister) List(selector labels.Selector) (ret []*v1beta1.Role
 
 // Get retrieves the Role from the indexer for a given namespace and name.
 func (s roleNamespaceLister) Get(name string) (*v1beta1.Role, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+	key := cache.NamespaceNameKey(s.namespace, name)
+	if s.scope != nil {
+		key = s.scope.CacheKey(key)
+	}
+	obj, exists, err := s.indexer.GetByKey(key)
 	if err != nil {
 		return nil, err
 	}

@@ -22,12 +22,14 @@ import (
 	v1beta1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // PodSecurityPolicyLister helps list PodSecurityPolicies.
 // All objects returned here must be treated as read-only.
 type PodSecurityPolicyLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) PodSecurityPolicyLister
 	// List lists all PodSecurityPolicies in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta1.PodSecurityPolicy, err error)
@@ -40,6 +42,7 @@ type PodSecurityPolicyLister interface {
 // podSecurityPolicyLister implements the PodSecurityPolicyLister interface.
 type podSecurityPolicyLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewPodSecurityPolicyLister returns a new PodSecurityPolicyLister.
@@ -47,11 +50,27 @@ func NewPodSecurityPolicyLister(indexer cache.Indexer) PodSecurityPolicyLister {
 	return &podSecurityPolicyLister{indexer: indexer}
 }
 
+func (s *podSecurityPolicyLister) Scope(scope cache.Scope) PodSecurityPolicyLister {
+	return &podSecurityPolicyLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all PodSecurityPolicies in the indexer.
 func (s *podSecurityPolicyLister) List(selector labels.Selector) (ret []*v1beta1.PodSecurityPolicy, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1beta1.PodSecurityPolicy))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

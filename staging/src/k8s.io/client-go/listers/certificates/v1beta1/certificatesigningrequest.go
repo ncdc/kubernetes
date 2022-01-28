@@ -22,12 +22,14 @@ import (
 	v1beta1 "k8s.io/api/certificates/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // CertificateSigningRequestLister helps list CertificateSigningRequests.
 // All objects returned here must be treated as read-only.
 type CertificateSigningRequestLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) CertificateSigningRequestLister
 	// List lists all CertificateSigningRequests in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta1.CertificateSigningRequest, err error)
@@ -40,6 +42,7 @@ type CertificateSigningRequestLister interface {
 // certificateSigningRequestLister implements the CertificateSigningRequestLister interface.
 type certificateSigningRequestLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewCertificateSigningRequestLister returns a new CertificateSigningRequestLister.
@@ -47,11 +50,27 @@ func NewCertificateSigningRequestLister(indexer cache.Indexer) CertificateSignin
 	return &certificateSigningRequestLister{indexer: indexer}
 }
 
+func (s *certificateSigningRequestLister) Scope(scope cache.Scope) CertificateSigningRequestLister {
+	return &certificateSigningRequestLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all CertificateSigningRequests in the indexer.
 func (s *certificateSigningRequestLister) List(selector labels.Selector) (ret []*v1beta1.CertificateSigningRequest, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1beta1.CertificateSigningRequest))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

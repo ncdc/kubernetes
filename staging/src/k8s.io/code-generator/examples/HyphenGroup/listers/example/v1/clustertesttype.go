@@ -21,13 +21,15 @@ package v1
 import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 	v1 "k8s.io/code-generator/examples/HyphenGroup/apis/example/v1"
 )
 
 // ClusterTestTypeLister helps list ClusterTestTypes.
 // All objects returned here must be treated as read-only.
 type ClusterTestTypeLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) ClusterTestTypeLister
 	// List lists all ClusterTestTypes in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.ClusterTestType, err error)
@@ -40,6 +42,7 @@ type ClusterTestTypeLister interface {
 // clusterTestTypeLister implements the ClusterTestTypeLister interface.
 type clusterTestTypeLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewClusterTestTypeLister returns a new ClusterTestTypeLister.
@@ -47,11 +50,27 @@ func NewClusterTestTypeLister(indexer cache.Indexer) ClusterTestTypeLister {
 	return &clusterTestTypeLister{indexer: indexer}
 }
 
+func (s *clusterTestTypeLister) Scope(scope cache.Scope) ClusterTestTypeLister {
+	return &clusterTestTypeLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all ClusterTestTypes in the indexer.
 func (s *clusterTestTypeLister) List(selector labels.Selector) (ret []*v1.ClusterTestType, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1.ClusterTestType))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 

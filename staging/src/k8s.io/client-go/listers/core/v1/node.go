@@ -22,12 +22,14 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // NodeLister helps list Nodes.
 // All objects returned here must be treated as read-only.
 type NodeLister interface {
+	// Scope returns a lister that can only get/list items in the given scope.
+	Scope(scope cache.Scope) NodeLister
 	// List lists all Nodes in the indexer.
 	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.Node, err error)
@@ -40,6 +42,7 @@ type NodeLister interface {
 // nodeLister implements the NodeLister interface.
 type nodeLister struct {
 	indexer cache.Indexer
+	scope   cache.Scope
 }
 
 // NewNodeLister returns a new NodeLister.
@@ -47,11 +50,27 @@ func NewNodeLister(indexer cache.Indexer) NodeLister {
 	return &nodeLister{indexer: indexer}
 }
 
+func (s *nodeLister) Scope(scope cache.Scope) NodeLister {
+	return &nodeLister{
+		indexer: s.indexer,
+		scope:   scope,
+	}
+}
+
 // List lists all Nodes in the indexer.
 func (s *nodeLister) List(selector labels.Selector) (ret []*v1.Node, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
+	appendFunc := func(m interface{}) {
 		ret = append(ret, m.(*v1.Node))
-	})
+	}
+
+	if s.scope == nil {
+		// Unscoped, so list everything
+		err = cache.ListAll(s.indexer, selector, appendFunc)
+		return ret, err
+	}
+
+	indexValue := s.scope.ListAllIndexValue()
+	err = cache.ListAllByIndexAndValue(s.indexer, cache.ListAllIndex, indexValue, selector, appendFunc)
 	return ret, err
 }
 
