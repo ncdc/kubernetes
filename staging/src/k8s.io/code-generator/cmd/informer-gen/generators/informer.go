@@ -169,7 +169,17 @@ func NewFiltered$.type|public$Informer(client $.clientSetInterface|raw$$if .name
 
 var typeInformerConstructor = `
 func (f *$.type|private$Informer) defaultInformer(client $.clientSetInterface|raw$, resyncPeriod $.timeDuration|raw$) $.cacheSharedIndexInformer|raw$ {
-	return NewFiltered$.type|public$Informer(client$if .namespaced$, f.namespace$end$, resyncPeriod, $.cacheIndexers|raw${$.cacheNamespaceIndex|raw$: $.cacheMetaNamespaceIndexFunc|raw$}, f.tweakListOptions)
+	$if .namespaced$ indexers := $.cacheIndexers|raw${$.cacheNamespaceIndex|raw$: $.cacheMetaNamespaceIndexFunc|raw$}
+	for k, v := range f.factory.ExtraNamespaceScopedIndexers() {
+		// TODO(ncdc): should we disallow overriding cache.NamespaceIndex?
+		indexers[k] = v
+	}
+	$else$indexers := $.cacheIndexers|raw${}
+	for k, v := range f.factory.ExtraClusterScopedIndexers() {
+		indexers[k] = v
+	}$end$
+
+	return NewFiltered$.type|public$Informer(client$if .namespaced$, f.namespace$end$, resyncPeriod, indexers, f.tweakListOptions)
 }
 `
 

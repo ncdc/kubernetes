@@ -74,6 +74,7 @@ func (g *factoryGenerator) GenerateType(c *generator.Context, t *types.Type, w i
 		gvNewFuncs[groupPkgName] = c.Universe.Function(types.Name{Package: path.Join(g.outputPackage, groupPkgName), Name: "New"})
 	}
 	m := map[string]interface{}{
+		"cacheIndexers":                  c.Universe.Type(cacheIndexers),
 		"cacheSharedIndexInformer":       c.Universe.Type(cacheSharedIndexInformer),
 		"groupVersions":                  g.groupVersions,
 		"gvInterfaces":                   gvInterfaces,
@@ -109,6 +110,8 @@ type sharedInformerFactory struct {
 	lock {{.syncMutex|raw}}
 	defaultResync {{.timeDuration|raw}}
 	customResync map[{{.reflectType|raw}}]{{.timeDuration|raw}}
+	extraClusterScopedIndexers {{.cacheIndexers|raw}}
+	extraNamespaceScopedIndexers {{.cacheIndexers|raw}}
 
 	informers map[{{.reflectType|raw}}]{{.cacheSharedIndexInformer|raw}}
 	// startedInformers is used for tracking which informers have been started.
@@ -142,6 +145,20 @@ func WithNamespace(namespace string) SharedInformerOption {
 	}
 }
 
+func WithExtraClusterScopedIndexers(indexers {{.cacheIndexers|raw}}) SharedInformerOption {
+	return func(factory *sharedInformerFactory) *sharedInformerFactory {
+		factory.extraClusterScopedIndexers = indexers
+		return factory
+	}
+}
+
+func WithExtraNamespaceScopedIndexers(indexers {{.cacheIndexers|raw}}) SharedInformerOption {
+	return func(factory *sharedInformerFactory) *sharedInformerFactory {
+		factory.extraNamespaceScopedIndexers = indexers
+		return factory
+	}
+}
+
 // NewSharedInformerFactory constructs a new instance of sharedInformerFactory for all namespaces.
 func NewSharedInformerFactory(client {{.clientSetInterface|raw}}, defaultResync {{.timeDuration|raw}}) SharedInformerFactory {
 	return NewSharedInformerFactoryWithOptions(client, defaultResync)
@@ -158,12 +175,14 @@ func NewFilteredSharedInformerFactory(client {{.clientSetInterface|raw}}, defaul
 // NewSharedInformerFactoryWithOptions constructs a new instance of a SharedInformerFactory with additional options.
 func NewSharedInformerFactoryWithOptions(client {{.clientSetInterface|raw}}, defaultResync {{.timeDuration|raw}}, options ...SharedInformerOption) SharedInformerFactory {
 	factory := &sharedInformerFactory{
-		client:           client,
-		namespace:        v1.NamespaceAll,
-		defaultResync:    defaultResync,
-		informers:        make(map[{{.reflectType|raw}}]{{.cacheSharedIndexInformer|raw}}),
-		startedInformers: make(map[{{.reflectType|raw}}]bool),
-		customResync:     make(map[{{.reflectType|raw}}]{{.timeDuration|raw}}),
+		client:                       client,
+		namespace:                    v1.NamespaceAll,
+		defaultResync:                defaultResync,
+		informers:                    make(map[{{.reflectType|raw}}]{{.cacheSharedIndexInformer|raw}}),
+		startedInformers:             make(map[{{.reflectType|raw}}]bool),
+		customResync:                 make(map[{{.reflectType|raw}}]{{.timeDuration|raw}}),
+		extraClusterScopedIndexers:   {{.cacheIndexers|raw}}{},
+		extraNamespaceScopedIndexers: {{.cacheIndexers|raw}}{},
 	}
 
 	// Apply all options
@@ -230,6 +249,18 @@ func (f *sharedInformerFactory) InformerFor(obj {{.runtimeObject|raw}}, newFunc 
   f.informers[informerType] = informer
 
   return informer
+}
+
+func (f *sharedInformerFactory) ExtraClusterScopedIndexers() {{.cacheIndexers|raw}} {
+	// TODO(ncdc): need to lock?
+	// TODO(ncdc): return a copy?
+	return f.extraClusterScopedIndexers
+}
+
+func (f *sharedInformerFactory) ExtraNamespaceScopedIndexers() {{.cacheIndexers|raw}} {
+	// TODO(ncdc): need to lock?
+	// TODO(ncdc): return a copy?
+	return f.extraNamespaceScopedIndexers
 }
 
 `
