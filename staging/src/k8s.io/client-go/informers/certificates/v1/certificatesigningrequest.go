@@ -77,7 +77,12 @@ func NewFilteredCertificateSigningRequestInformer(client kubernetes.Interface, r
 }
 
 func (f *certificateSigningRequestInformer) defaultInformer(client kubernetes.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredCertificateSigningRequestInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	indexers := cache.Indexers{}
+	for k, v := range f.factory.ExtraClusterScopedIndexers() {
+		indexers[k] = v
+	}
+
+	return NewFilteredCertificateSigningRequestInformer(client, resyncPeriod, indexers, f.tweakListOptions)
 }
 
 func (f *certificateSigningRequestInformer) Informer() cache.SharedIndexInformer {

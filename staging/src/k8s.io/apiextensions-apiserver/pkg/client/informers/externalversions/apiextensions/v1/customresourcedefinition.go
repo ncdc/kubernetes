@@ -77,7 +77,12 @@ func NewFilteredCustomResourceDefinitionInformer(client clientset.Interface, res
 }
 
 func (f *customResourceDefinitionInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredCustomResourceDefinitionInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	indexers := cache.Indexers{}
+	for k, v := range f.factory.ExtraClusterScopedIndexers() {
+		indexers[k] = v
+	}
+
+	return NewFilteredCustomResourceDefinitionInformer(client, resyncPeriod, indexers, f.tweakListOptions)
 }
 
 func (f *customResourceDefinitionInformer) Informer() cache.SharedIndexInformer {

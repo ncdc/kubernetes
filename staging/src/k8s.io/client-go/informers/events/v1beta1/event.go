@@ -78,7 +78,13 @@ func NewFilteredEventInformer(client kubernetes.Interface, namespace string, res
 }
 
 func (f *eventInformer) defaultInformer(client kubernetes.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredEventInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	indexers := cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}
+	for k, v := range f.factory.ExtraNamespaceScopedIndexers() {
+		// TODO(ncdc): should we disallow overriding cache.NamespaceIndex?
+		indexers[k] = v
+	}
+
+	return NewFilteredEventInformer(client, f.namespace, resyncPeriod, indexers, f.tweakListOptions)
 }
 
 func (f *eventInformer) Informer() cache.SharedIndexInformer {

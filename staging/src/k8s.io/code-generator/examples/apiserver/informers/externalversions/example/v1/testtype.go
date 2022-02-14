@@ -78,7 +78,13 @@ func NewFilteredTestTypeInformer(client versioned.Interface, namespace string, r
 }
 
 func (f *testTypeInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredTestTypeInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	indexers := cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}
+	for k, v := range f.factory.ExtraNamespaceScopedIndexers() {
+		// TODO(ncdc): should we disallow overriding cache.NamespaceIndex?
+		indexers[k] = v
+	}
+
+	return NewFilteredTestTypeInformer(client, f.namespace, resyncPeriod, indexers, f.tweakListOptions)
 }
 
 func (f *testTypeInformer) Informer() cache.SharedIndexInformer {

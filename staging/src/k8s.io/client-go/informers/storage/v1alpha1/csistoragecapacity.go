@@ -78,7 +78,13 @@ func NewFilteredCSIStorageCapacityInformer(client kubernetes.Interface, namespac
 }
 
 func (f *cSIStorageCapacityInformer) defaultInformer(client kubernetes.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredCSIStorageCapacityInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	indexers := cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}
+	for k, v := range f.factory.ExtraNamespaceScopedIndexers() {
+		// TODO(ncdc): should we disallow overriding cache.NamespaceIndex?
+		indexers[k] = v
+	}
+
+	return NewFilteredCSIStorageCapacityInformer(client, f.namespace, resyncPeriod, indexers, f.tweakListOptions)
 }
 
 func (f *cSIStorageCapacityInformer) Informer() cache.SharedIndexInformer {

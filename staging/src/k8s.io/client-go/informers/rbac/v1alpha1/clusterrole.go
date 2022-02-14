@@ -77,7 +77,12 @@ func NewFilteredClusterRoleInformer(client kubernetes.Interface, resyncPeriod ti
 }
 
 func (f *clusterRoleInformer) defaultInformer(client kubernetes.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredClusterRoleInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	indexers := cache.Indexers{}
+	for k, v := range f.factory.ExtraClusterScopedIndexers() {
+		indexers[k] = v
+	}
+
+	return NewFilteredClusterRoleInformer(client, resyncPeriod, indexers, f.tweakListOptions)
 }
 
 func (f *clusterRoleInformer) Informer() cache.SharedIndexInformer {

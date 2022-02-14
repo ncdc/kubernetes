@@ -77,7 +77,12 @@ func NewFilteredFischerInformer(client versioned.Interface, resyncPeriod time.Du
 }
 
 func (f *fischerInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredFischerInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	indexers := cache.Indexers{}
+	for k, v := range f.factory.ExtraClusterScopedIndexers() {
+		indexers[k] = v
+	}
+
+	return NewFilteredFischerInformer(client, resyncPeriod, indexers, f.tweakListOptions)
 }
 
 func (f *fischerInformer) Informer() cache.SharedIndexInformer {

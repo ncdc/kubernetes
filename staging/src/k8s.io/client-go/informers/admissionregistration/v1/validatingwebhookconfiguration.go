@@ -77,7 +77,12 @@ func NewFilteredValidatingWebhookConfigurationInformer(client kubernetes.Interfa
 }
 
 func (f *validatingWebhookConfigurationInformer) defaultInformer(client kubernetes.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredValidatingWebhookConfigurationInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	indexers := cache.Indexers{}
+	for k, v := range f.factory.ExtraClusterScopedIndexers() {
+		indexers[k] = v
+	}
+
+	return NewFilteredValidatingWebhookConfigurationInformer(client, resyncPeriod, indexers, f.tweakListOptions)
 }
 
 func (f *validatingWebhookConfigurationInformer) Informer() cache.SharedIndexInformer {

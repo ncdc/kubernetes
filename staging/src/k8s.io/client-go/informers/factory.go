@@ -53,12 +53,14 @@ import (
 type SharedInformerOption func(*sharedInformerFactory) *sharedInformerFactory
 
 type sharedInformerFactory struct {
-	client           kubernetes.Interface
-	namespace        string
-	tweakListOptions internalinterfaces.TweakListOptionsFunc
-	lock             sync.Mutex
-	defaultResync    time.Duration
-	customResync     map[reflect.Type]time.Duration
+	client                       kubernetes.Interface
+	namespace                    string
+	tweakListOptions             internalinterfaces.TweakListOptionsFunc
+	lock                         sync.Mutex
+	defaultResync                time.Duration
+	customResync                 map[reflect.Type]time.Duration
+	extraClusterScopedIndexers   cache.Indexers
+	extraNamespaceScopedIndexers cache.Indexers
 
 	informers map[reflect.Type]cache.SharedIndexInformer
 	// startedInformers is used for tracking which informers have been started.
@@ -92,6 +94,20 @@ func WithNamespace(namespace string) SharedInformerOption {
 	}
 }
 
+func WithExtraClusterScopedIndexers(indexers cache.Indexers) SharedInformerOption {
+	return func(factory *sharedInformerFactory) *sharedInformerFactory {
+		factory.extraClusterScopedIndexers = indexers
+		return factory
+	}
+}
+
+func WithExtraNamespaceScopedIndexers(indexers cache.Indexers) SharedInformerOption {
+	return func(factory *sharedInformerFactory) *sharedInformerFactory {
+		factory.extraNamespaceScopedIndexers = indexers
+		return factory
+	}
+}
+
 // NewSharedInformerFactory constructs a new instance of sharedInformerFactory for all namespaces.
 func NewSharedInformerFactory(client kubernetes.Interface, defaultResync time.Duration) SharedInformerFactory {
 	return NewSharedInformerFactoryWithOptions(client, defaultResync)
@@ -108,12 +124,14 @@ func NewFilteredSharedInformerFactory(client kubernetes.Interface, defaultResync
 // NewSharedInformerFactoryWithOptions constructs a new instance of a SharedInformerFactory with additional options.
 func NewSharedInformerFactoryWithOptions(client kubernetes.Interface, defaultResync time.Duration, options ...SharedInformerOption) SharedInformerFactory {
 	factory := &sharedInformerFactory{
-		client:           client,
-		namespace:        v1.NamespaceAll,
-		defaultResync:    defaultResync,
-		informers:        make(map[reflect.Type]cache.SharedIndexInformer),
-		startedInformers: make(map[reflect.Type]bool),
-		customResync:     make(map[reflect.Type]time.Duration),
+		client:                       client,
+		namespace:                    v1.NamespaceAll,
+		defaultResync:                defaultResync,
+		informers:                    make(map[reflect.Type]cache.SharedIndexInformer),
+		startedInformers:             make(map[reflect.Type]bool),
+		customResync:                 make(map[reflect.Type]time.Duration),
+		extraClusterScopedIndexers:   cache.Indexers{},
+		extraNamespaceScopedIndexers: cache.Indexers{},
 	}
 
 	// Apply all options
@@ -180,6 +198,18 @@ func (f *sharedInformerFactory) InformerFor(obj runtime.Object, newFunc internal
 	f.informers[informerType] = informer
 
 	return informer
+}
+
+func (f *sharedInformerFactory) ExtraClusterScopedIndexers() cache.Indexers {
+	// TODO(ncdc): need to lock?
+	// TODO(ncdc): return a copy?
+	return f.extraClusterScopedIndexers
+}
+
+func (f *sharedInformerFactory) ExtraNamespaceScopedIndexers() cache.Indexers {
+	// TODO(ncdc): need to lock?
+	// TODO(ncdc): return a copy?
+	return f.extraNamespaceScopedIndexers
 }
 
 // SharedInformerFactory provides shared informers for resources in all known

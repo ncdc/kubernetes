@@ -77,7 +77,12 @@ func NewFilteredNamespaceInformer(client kubernetes.Interface, resyncPeriod time
 }
 
 func (f *namespaceInformer) defaultInformer(client kubernetes.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredNamespaceInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	indexers := cache.Indexers{}
+	for k, v := range f.factory.ExtraClusterScopedIndexers() {
+		indexers[k] = v
+	}
+
+	return NewFilteredNamespaceInformer(client, resyncPeriod, indexers, f.tweakListOptions)
 }
 
 func (f *namespaceInformer) Informer() cache.SharedIndexInformer {
