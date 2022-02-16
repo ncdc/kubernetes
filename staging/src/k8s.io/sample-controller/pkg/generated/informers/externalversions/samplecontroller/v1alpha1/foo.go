@@ -78,7 +78,7 @@ func NewFilteredFooInformer(client versioned.Interface, namespace string, resync
 }
 
 func (f *fooInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	indexers := cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}
+	indexers := cache.Indexers{cache.NamespaceIndex: cache.NamespaceIndexFunc}
 	for k, v := range f.factory.ExtraNamespaceScopedIndexers() {
 		// TODO(ncdc): should we disallow overriding cache.NamespaceIndex?
 		indexers[k] = v
