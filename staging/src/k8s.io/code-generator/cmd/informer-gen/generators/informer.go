@@ -81,8 +81,8 @@ func (g *informerGenerator) GenerateType(c *generator.Context, t *types.Type, w 
 		"apiScheme":                       c.Universe.Type(apiScheme),
 		"cacheIndexers":                   c.Universe.Type(cacheIndexers),
 		"cacheListWatch":                  c.Universe.Type(cacheListWatch),
-		"cacheMetaNamespaceIndexFunc":     c.Universe.Function(cacheMetaNamespaceIndexFunc),
 		"cacheNamespaceIndex":             c.Universe.Variable(cacheNamespaceIndex),
+		"cacheNamespaceIndexFunc":         c.Universe.Function(cacheNamespaceIndexFunc),
 		"cacheNewSharedIndexInformer":     c.Universe.Function(cacheNewSharedIndexInformer),
 		"cacheSharedIndexInformer":        c.Universe.Type(cacheSharedIndexInformer),
 		"clientSetInterface":              clientSetInterface,
@@ -169,7 +169,7 @@ func NewFiltered$.type|public$Informer(client $.clientSetInterface|raw$$if .name
 
 var typeInformerConstructor = `
 func (f *$.type|private$Informer) defaultInformer(client $.clientSetInterface|raw$, resyncPeriod $.timeDuration|raw$) $.cacheSharedIndexInformer|raw$ {
-	$if .namespaced$ indexers := $.cacheIndexers|raw${$.cacheNamespaceIndex|raw$: $.cacheMetaNamespaceIndexFunc|raw$}
+	$if .namespaced$ indexers := $.cacheIndexers|raw${$.cacheNamespaceIndex|raw$: $.cacheNamespaceIndexFunc|raw$}
 	for k, v := range f.factory.ExtraNamespaceScopedIndexers() {
 		// TODO(ncdc): should we disallow overriding cache.NamespaceIndex?
 		indexers[k] = v
