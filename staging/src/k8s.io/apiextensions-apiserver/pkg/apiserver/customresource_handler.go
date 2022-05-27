@@ -277,6 +277,7 @@ func (r *crdHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	crd, err := r.clusterAwareCRDLister.Get(req.Context(), crdName)
 	if apierrors.IsNotFound(err) {
+		klog.Errorf("ANDY r.clusterAwareCRDLister.Get %q NOT FOUND!!!", crdName)
 		r.delegate.ServeHTTP(w, req)
 		return
 	}
@@ -326,6 +327,7 @@ func (r *crdHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	crdInfo, err := r.getOrCreateServingInfoFor(crd)
 	if apierrors.IsNotFound(err) {
+		klog.Errorf("ANDY r.getOrCreateServingInfoFor %q NOT FOUND!!!", crd.Name)
 		r.delegate.ServeHTTP(w, req)
 		return
 	}
