@@ -21,12 +21,16 @@ import (
 	"fmt"
 	"time"
 
+	kcpcache "github.com/kcp-dev/apimachinery/pkg/cache"
+	"github.com/kcp-dev/logicalcluster/v2"
+
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
@@ -143,19 +147,19 @@ func (c *ServiceAccountsController) serviceAccountDeleted(obj interface{}) {
 			return
 		}
 	}
-	c.queue.Add(sa.Namespace)
+	c.enqueueNamespace(sa)
 }
 
 // namespaceAdded reacts to a Namespace creation by creating a default ServiceAccount object
 func (c *ServiceAccountsController) namespaceAdded(obj interface{}) {
 	namespace := obj.(*v1.Namespace)
-	c.queue.Add(namespace.Name)
+	c.enqueueNamespace(namespace)
 }
 
 // namespaceUpdated reacts to a Namespace update (or re-list) by creating a default ServiceAccount in the namespace if needed
 func (c *ServiceAccountsController) namespaceUpdated(oldObj interface{}, newObj interface{}) {
 	newNamespace := newObj.(*v1.Namespace)
-	c.queue.Add(newNamespace.Name)
+	c.enqueueNamespace(newNamespace)
 }
 
 func (c *ServiceAccountsController) runWorker(ctx context.Context) {
@@ -188,7 +192,12 @@ func (c *ServiceAccountsController) syncNamespace(ctx context.Context, key strin
 		klog.V(4).Infof("Finished syncing namespace %q (%v)", key, time.Since(startTime))
 	}()
 
-	ns, err := c.nsLister.Get(key)
+	clusterName, _, namespaceName, err := kcpcache.SplitMetaClusterNamespaceKey(key)
+	if err != nil {
+		utilruntime.HandleError(err)
+		return err
+	}
+
 	if apierrors.IsNotFound(err) {
 		return nil
 	}
@@ -199,6 +208,8 @@ func (c *ServiceAccountsController) syncNamespace(ctx context.Context, key strin
 		// If namespace is not active, we shouldn't try to create anything
 		return nil
 	}
+
+	clusterCtx := genericapirequest.WithCluster(ctx, genericapirequest.Cluster{Name: logicalcluster.From(ns)})
 
 	createFailures := []error{}
 	for _, sa := range c.serviceAccountsToEnsure {
@@ -213,7 +224,7 @@ func (c *ServiceAccountsController) syncNamespace(ctx context.Context, key strin
 		// TODO eliminate this once the fake client can handle creation without NS
 		sa.Namespace = ns.Name
 
-		if _, err := c.client.CoreV1().ServiceAccounts(ns.Name).Create(ctx, &sa, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		if _, err := c.client.CoreV1().ServiceAccounts(ns.Name).Create(clusterCtx, &sa, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
 			// we can safely ignore terminating namespace errors
 			if !apierrors.HasStatusCause(err, v1.NamespaceTerminatingCause) {
 				createFailures = append(createFailures, err)
@@ -222,4 +233,13 @@ func (c *ServiceAccountsController) syncNamespace(ctx context.Context, key strin
 	}
 
 	return utilerrors.Flatten(utilerrors.NewAggregate(createFailures))
+}
+
+func (c *ServiceAccountsController) enqueueNamespace(obj metav1.Object) {
+	key, err := kcpcache.MetaClusterNamespaceKeyFunc(obj)
+	if err != nil {
+		utilruntime.HandleError(err)
+	}
+
+	c.queue.Add(key)
 }
